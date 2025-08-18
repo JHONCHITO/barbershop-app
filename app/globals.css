@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Variables en oklch/hsl como las definiste */
+:root {
+  --background: 0% 0 0; /* placeholder: pon aquí tus valores reales en HSL, o guarda oklch y conviertes a HSL */
+  --foreground: 0% 0 0;
+  --card: 0% 0 100%;
+  --card-foreground: 0% 0 0;
+  --popover: 0% 0 100%;
+  --popover-foreground: 0% 0 0;
+  --primary: 0% 0 0;
+  --primary-foreground: 100% 0 100%;
+  --secondary: 50% 50% 264;
+  --secondary-foreground: 100% 0 100%;
+  --muted: 97% 0 0;
+  --muted-foreground: 55% 0 0;
+  --accent: 50% 50% 264;
+  --accent-foreground: 100% 0 100%;
+  --destructive: 58% 50% 27;
+  --destructive-foreground: 100% 0 100%;
+  --border: 92% 0 0;
+  --input: 98% 0 0;
+  --ring: 50% 50% 264;
+  --chart-1: 50% 50% 264;
+  --chart-2: 60% 20% 280;
+  --chart-3: 70% 15% 290;
+  --chart-4: 80% 10% 300;
+  --chart-5: 85% 5% 310;
+  --radius: 0.5rem;
+
+  --sidebar: 98% 0 0;
+  --sidebar-foreground: 20% 0 0;
+  --sidebar-primary: 100% 0 0;
+  --sidebar-primary-foreground: 20% 0 0;
+  --sidebar-accent: 50% 50% 264;
+  --sidebar-accent-foreground: 100% 0 100%;
+  --sidebar-border: 92% 0 0;
+  --sidebar-ring: 50% 50% 264;
+}
+
+.dark {
+  /* tus valores dark */
+}
+
+/* Base utilities en v3 (sin outline-ring/50) */
+@layer base {
+  /* Ya debería existir la clase border-border porque la define tailwind.config */
+  * { @apply border-border; }
+
+  /* Para anillos de enfoque “estilo shadcn” */
+  *:focus-visible { @apply outline-none ring-2 ring-ring/50 ring-offset-2 ring-offset-background; }
+
+  body { @apply bg-background text-foreground; }
+}
