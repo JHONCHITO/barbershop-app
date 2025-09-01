@@ -1,20 +1,28 @@
-"use client"
+// components/clientes.tsx
+"use client";
 
-import { useState } from "react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
-import { Plus, Search, Edit, Trash2, Phone, Mail, Calendar, Star, Save, X } from "lucide-react"
+import { useState } from "react";
+import { useAuth } from "@/contexts/auth-context";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Search, Edit, Trash2, Phone, Mail, Calendar, Star, Save, X } from "lucide-react";
 
-export function Clientes() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [editingClient, setEditingClient] = useState<number | null>(null)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+export function Clientes({ isAdmin = false }: { isAdmin?: boolean }) {
+  const { role } = useAuth();
+  const admin = isAdmin || role === "admin";
+
+  // Si NO es admin, no muestra nada
+  if (!admin) return null;
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [editingClient, setEditingClient] = useState<number | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const [clientes, setClientes] = useState([
     {
@@ -89,7 +97,7 @@ export function Clientes() {
       direccion: "Calle 012 #34-56, Bogotá",
       fechaNacimiento: "2000-01-01",
     },
-  ])
+  ]);
 
   const [newClient, setNewClient] = useState({
     nombre: "",
@@ -99,74 +107,72 @@ export function Clientes() {
     fechaNacimiento: "",
     notas: "",
     estado: "nuevo",
-  })
+  });
 
   const updateClient = (id: number, field: string, value: any) => {
-    setClientes((prev) => prev.map((cliente) => (cliente.id === id ? { ...cliente, [field]: value } : cliente)))
-  }
+    setClientes((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value } : c)));
+  };
 
   const addNewClient = () => {
-    if (newClient.nombre && newClient.email && newClient.telefono) {
-      const newId = Math.max(...clientes.map((c) => c.id)) + 1
-      setClientes((prev) => [
-        ...prev,
-        {
-          ...newClient,
-          id: newId,
-          fechaRegistro: new Date().toISOString().split("T")[0],
-          ultimaVisita: new Date().toISOString().split("T")[0],
-          totalVisitas: 0,
-          gastoTotal: 0,
-          servicioFavorito: "",
-          barberoFavorito: "",
-          rating: 5,
-          avatar: "",
-        },
-      ])
-      setNewClient({
-        nombre: "",
-        email: "",
-        telefono: "",
-        direccion: "",
-        fechaNacimiento: "",
-        notas: "",
-        estado: "nuevo",
-      })
-      setIsDialogOpen(false)
-    }
-  }
+    if (!(newClient.nombre && newClient.email && newClient.telefono)) return;
+    const newId = clientes.length ? Math.max(...clientes.map((c) => c.id)) + 1 : 1;
+    setClientes((prev) => [
+      ...prev,
+      {
+        ...newClient,
+        id: newId,
+        fechaRegistro: new Date().toISOString().split("T")[0],
+        ultimaVisita: new Date().toISOString().split("T")[0],
+        totalVisitas: 0,
+        gastoTotal: 0,
+        servicioFavorito: "",
+        barberoFavorito: "",
+        rating: 5,
+        avatar: "",
+      },
+    ]);
+    setNewClient({
+      nombre: "",
+      email: "",
+      telefono: "",
+      direccion: "",
+      fechaNacimiento: "",
+      notas: "",
+      estado: "nuevo",
+    });
+    setIsDialogOpen(false);
+  };
 
   const deleteClient = (id: number) => {
-    setClientes((prev) => prev.filter((cliente) => cliente.id !== id))
-  }
+    setClientes((prev) => prev.filter((c) => c.id !== id));
+  };
 
   const getEstadoBadge = (estado: string) => {
     switch (estado) {
       case "activo":
-        return <Badge className="bg-green-100 text-green-800">Activo</Badge>
+        return <Badge className="bg-green-100 text-green-800">Activo</Badge>;
       case "vip":
-        return <Badge className="bg-purple-100 text-purple-800">VIP</Badge>
+        return <Badge className="bg-purple-100 text-purple-800">VIP</Badge>;
       case "nuevo":
-        return <Badge className="bg-blue-100 text-blue-800">Nuevo</Badge>
+        return <Badge className="bg-blue-100 text-blue-800">Nuevo</Badge>;
       case "inactivo":
-        return <Badge className="bg-red-100 text-red-800">Inactivo</Badge>
+        return <Badge className="bg-red-100 text-red-800">Inactivo</Badge>;
       default:
-        return <Badge>{estado}</Badge>
+        return <Badge>{estado}</Badge>;
     }
-  }
+  };
 
-  const renderStars = (rating: number) => {
-    return Array.from({ length: 5 }, (_, i) => (
+  const renderStars = (rating: number) =>
+    Array.from({ length: 5 }, (_, i) => (
       <Star key={i} className={`w-4 h-4 ${i < rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`} />
-    ))
-  }
+    ));
 
   const filteredClientes = clientes.filter(
-    (cliente) =>
-      cliente.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cliente.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cliente.telefono.includes(searchTerm),
-  )
+    (c) =>
+      c.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.telefono.includes(searchTerm)
+  );
 
   return (
     <div className="p-6 space-y-6">
@@ -175,6 +181,8 @@ export function Clientes() {
           <h1 className="text-3xl font-bold">Clientes</h1>
           <p className="text-muted-foreground">Gestiona tu base de clientes</p>
         </div>
+
+        {/* Solo admin puede crear */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -193,7 +201,7 @@ export function Clientes() {
                   id="nombre"
                   placeholder="Nombre del cliente"
                   value={newClient.nombre}
-                  onChange={(e) => setNewClient((prev) => ({ ...prev, nombre: e.target.value }))}
+                  onChange={(e) => setNewClient((p) => ({ ...p, nombre: e.target.value }))}
                 />
               </div>
               <div>
@@ -203,7 +211,7 @@ export function Clientes() {
                   type="email"
                   placeholder="cliente@email.com"
                   value={newClient.email}
-                  onChange={(e) => setNewClient((prev) => ({ ...prev, email: e.target.value }))}
+                  onChange={(e) => setNewClient((p) => ({ ...p, email: e.target.value }))}
                 />
               </div>
               <div>
@@ -212,7 +220,7 @@ export function Clientes() {
                   id="telefono"
                   placeholder="+57 300 123 4567"
                   value={newClient.telefono}
-                  onChange={(e) => setNewClient((prev) => ({ ...prev, telefono: e.target.value }))}
+                  onChange={(e) => setNewClient((p) => ({ ...p, telefono: e.target.value }))}
                 />
               </div>
               <div>
@@ -221,7 +229,7 @@ export function Clientes() {
                   id="direccion"
                   placeholder="Dirección completa"
                   value={newClient.direccion}
-                  onChange={(e) => setNewClient((prev) => ({ ...prev, direccion: e.target.value }))}
+                  onChange={(e) => setNewClient((p) => ({ ...p, direccion: e.target.value }))}
                 />
               </div>
               <div>
@@ -230,7 +238,7 @@ export function Clientes() {
                   id="notas"
                   placeholder="Notas sobre el cliente..."
                   value={newClient.notas}
-                  onChange={(e) => setNewClient((prev) => ({ ...prev, notas: e.target.value }))}
+                  onChange={(e) => setNewClient((p) => ({ ...p, notas: e.target.value }))}
                 />
               </div>
               <Button className="w-full" onClick={addNewClient}>
@@ -290,7 +298,7 @@ export function Clientes() {
         </CardContent>
       </Card>
 
-      {/* Lista de Clientes */}
+      {/* Lista */}
       <div className="grid gap-4">
         {filteredClientes.map((cliente) => (
           <Card key={cliente.id}>
@@ -300,10 +308,7 @@ export function Clientes() {
                   <Avatar className="h-16 w-16">
                     <AvatarImage src={cliente.avatar || "/placeholder.svg"} alt={cliente.nombre} />
                     <AvatarFallback>
-                      {cliente.nombre
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
+                      {cliente.nombre.split(" ").map((n) => n[0]).join("")}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
@@ -350,22 +355,13 @@ export function Clientes() {
                       </div>
 
                       <div className="space-y-1">
-                        <p>
-                          <span className="font-medium">Visitas:</span> {cliente.totalVisitas}
-                        </p>
-                        <p>
-                          <span className="font-medium">Gasto total:</span> $
-                          {cliente.gastoTotal.toLocaleString("es-CO")}
-                        </p>
+                        <p><span className="font-medium">Visitas:</span> {cliente.totalVisitas}</p>
+                        <p><span className="font-medium">Gasto total:</span> ${cliente.gastoTotal.toLocaleString("es-CO")}</p>
                       </div>
 
                       <div className="space-y-1">
-                        <p>
-                          <span className="font-medium">Servicio favorito:</span> {cliente.servicioFavorito}
-                        </p>
-                        <p>
-                          <span className="font-medium">Barbero favorito:</span> {cliente.barberoFavorito}
-                        </p>
+                        <p><span className="font-medium">Servicio favorito:</span> {cliente.servicioFavorito}</p>
+                        <p><span className="font-medium">Barbero favorito:</span> {cliente.barberoFavorito}</p>
                       </div>
                     </div>
 
@@ -388,6 +384,7 @@ export function Clientes() {
                   </div>
                 </div>
 
+                {/* Botones de edición SOLO admin */}
                 <div className="flex gap-2">
                   {editingClient === cliente.id ? (
                     <>
@@ -416,5 +413,5 @@ export function Clientes() {
         ))}
       </div>
     </div>
-  )
+  );
 }

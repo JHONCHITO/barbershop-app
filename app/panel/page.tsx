@@ -1,4 +1,4 @@
-// app/page.tsx
+// app/panel/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -29,7 +29,7 @@ type Section =
   | "reportes"
   | "configuracion";
 
-export default function Home() {
+export default function Panel() {
   const { isAuthenticated, user, role } = useAuth();
   const [activeSection, setActiveSection] = useState<Section>("reservas");
 

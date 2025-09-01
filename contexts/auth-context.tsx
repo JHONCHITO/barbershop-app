@@ -1,74 +1,64 @@
-"use client"
+"use client";
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useState } from "react";
 
-type UserRole = "admin" | "cliente"
+export type Role = "admin" | "cliente";
+export type User = { id: string; name: string; role: Role };
 
-interface User {
-  id: string
-  name: string
-  role: UserRole
-}
+type AuthCtx = {
+  user: User | null;
+  role: Role;
+  isAuthenticated: boolean;
+  login: (role?: Role) => void;     // <— lo que usa tu Login
+  loginAsAdmin: () => void;         // opcional/compat
+  loginAsClient: () => void;        // opcional/compat
+  logout: () => void;
+};
 
-interface AuthContextType {
-  user: User | null
-  login: (role: UserRole, password?: string) => boolean
-  logout: () => void
-  isAuthenticated: boolean
-}
+const AuthContext = createContext<AuthCtx | undefined>(undefined);
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-
+  // Carga desde localStorage (persistencia simple)
   useEffect(() => {
-    const savedUser = localStorage.getItem("barberpro-user")
-    if (savedUser) {
-      setUser(JSON.parse(savedUser))
-    }
-  }, [])
+    const raw = typeof window !== "undefined" ? localStorage.getItem("auth_user") : null;
+    if (raw) setUser(JSON.parse(raw));
+  }, []);
 
-  const login = (role: UserRole, password?: string): boolean => {
-    if (role === "admin") {
-      if (password !== "Jhon6683") {
-        return false
-      }
-      const adminUser = { id: "1", name: "Administrador", role: "admin" as UserRole }
-      setUser(adminUser)
-      localStorage.setItem("barberpro-user", JSON.stringify(adminUser))
-      return true
-    } else {
-      const clientUser = { id: "2", name: "Cliente", role: "cliente" as UserRole }
-      setUser(clientUser)
-      localStorage.setItem("barberpro-user", JSON.stringify(clientUser))
-      return true
-    }
-  }
+  // Guarda cambios
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (user) localStorage.setItem("auth_user", JSON.stringify(user));
+    else localStorage.removeItem("auth_user");
+  }, [user]);
 
-  const logout = () => {
-    setUser(null)
-    localStorage.removeItem("barberpro-user")
-  }
+  const login = (role: Role = "cliente") =>
+    setUser({ id: role === "admin" ? "1" : "2", name: role === "admin" ? "Admin" : "Cliente", role });
+
+  const loginAsAdmin = () => login("admin");
+  const loginAsClient = () => login("cliente");
+  const logout = () => setUser(null);
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        login,
-        logout,
+        role: user?.role ?? "cliente",
         isAuthenticated: !!user,
+        login,
+        loginAsAdmin,
+        loginAsClient,
+        logout,
       }}
     >
       {children}
     </AuthContext.Provider>
-  )
+  );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
-  return context
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
+  return ctx;
 }

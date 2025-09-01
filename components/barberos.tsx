@@ -1,549 +1,416 @@
-"use client"
+// components/barberos.tsx
+"use client";
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Plus, Edit, Trash2, Star, Phone, Mail, Calendar, Save, X, MapPin } from "lucide-react"
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Plus, Edit, Trash2, Star, Phone, Mail, Calendar,
+  Save, X, MapPin, ImagePlus, MessageSquare, LockKeyhole
+} from "lucide-react";
+
+import { useBarberos } from "@/contexts/barberos-context";
+import { useAuth } from "@/contexts/auth-context";
+import type { BarberiaID, Barbero, EstadoBarbero } from "@/contexts/barberos-context";
+
+function fileToDataURL(file: File): Promise<string> {
+  return new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = () => res(String(reader.result));
+    reader.onerror = rej;
+    reader.readAsDataURL(file);
+  });
+}
 
 export function Barberos() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [editingBarbero, setEditingBarbero] = useState<number | null>(null)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const router = useRouter();
+  const { role } = useAuth() as any;      // "admin" | "cliente"
+  const isAdmin = role === "admin";
 
-  const [barberos, setBarberos] = useState([
-    {
-      id: 1,
-      nombre: "Carlos Ruiz",
-      email: "carlos@barberpro.com",
-      telefono: "+34 666 111 222",
-      direccion: "Calle Mayor 123, Madrid",
-      especialidades: ["Corte Clásico", "Barba", "Afeitado"],
-      experiencia: "8 años",
-      rating: 4.9,
-      citasHoy: 8,
-      citasSemana: 45,
-      horarioInicio: "09:00",
-      horarioFin: "18:00",
-      estado: "activo",
-      avatar: "/professional-male-barber.png",
-      biografia: "Especialista en cortes clásicos con más de 8 años de experiencia",
-      salario: 2500,
-      comision: 15,
-    },
-    {
-      id: 2,
-      nombre: "Ana López",
-      email: "ana@barberpro.com",
-      telefono: "+34 666 333 444",
-      direccion: "Avenida Libertad 45, Madrid",
-      especialidades: ["Corte Mujer", "Peinados", "Tratamientos"],
-      experiencia: "6 años",
+  const { getBarberosDe, upsertBarbero, eliminarBarbero } = useBarberos();
+
+  const [barberiaSel, setBarberiaSel] = useState<BarberiaID>("principal");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [editing, setEditing] = useState<{ originalId: string; data: Barbero } | null>(null);
+  const [creating, setCreating] = useState<Barbero | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const lista = getBarberosDe(barberiaSel);
+
+  const filtered = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return lista;
+    return lista.filter(
+      (b) =>
+        b.nombre.toLowerCase().includes(q) ||
+        (b.especialidad?.toLowerCase().includes(q) ?? false) ||
+        (b.especialidades?.join(", ").toLowerCase().includes(q) ?? false)
+    );
+  }, [lista, searchTerm]);
+
+  const getEstadoBadge = (estado?: EstadoBarbero, disponible?: boolean) => {
+    const val = estado ?? (disponible ? "Activo" : "Descanso");
+    if (val === "Activo") return <Badge className="bg-green-100 text-green-800">Activo</Badge>;
+    return <Badge className="bg-yellow-100 text-yellow-800">Descanso</Badge>;
+  };
+
+  const startCreate = () => {
+    setIsDialogOpen(true);
+    setCreating({
+      id: `b-${Date.now()}`,
+      nombre: "",
+      especialidad: "",
       rating: 4.8,
-      citasHoy: 6,
-      citasSemana: 38,
-      horarioInicio: "10:00",
-      horarioFin: "19:00",
-      estado: "activo",
-      avatar: "/professional-female-barber.png",
-      biografia: "Experta en cortes femeninos y tratamientos capilares",
-      salario: 2200,
-      comision: 12,
-    },
-    {
-      id: 3,
-      nombre: "Miguel Torres",
-      email: "miguel@barberpro.com",
-      telefono: "+34 666 555 666",
-      direccion: "Plaza Central 8, Madrid",
-      especialidades: ["Corte Moderno", "Diseño", "Color"],
-      experiencia: "4 años",
-      rating: 4.7,
-      citasHoy: 5,
-      citasSemana: 32,
-      horarioInicio: "11:00",
-      horarioFin: "20:00",
-      estado: "descanso",
-      avatar: "/joven-barbero-moderno.png",
-      biografia: "Especialista en tendencias modernas y técnicas de color",
-      salario: 2000,
-      comision: 10,
-    },
-  ])
+      disponible: true,
+      whatsapp: "",
+      email: "",
+      telefono: "",
+      direccion: "",
+      horario: "",
+      especialidades: [],
+      hoy: 0,
+      semana: 0,
+      experienciaAnios: 0,
+      estado: "Activo",
+      avatar: "",
+      biografia: "",
+    });
+  };
 
-  const [newBarbero, setNewBarbero] = useState({
-    nombre: "",
-    email: "",
-    telefono: "",
-    direccion: "",
-    especialidades: [] as string[],
-    experiencia: "",
-    horarioInicio: "09:00",
-    horarioFin: "18:00",
-    biografia: "",
-    salario: 0,
-    comision: 0,
-  })
+  const saveBarbero = () => {
+    const payload = editing ? editing.data : (creating as Barbero);
+    if (!payload.nombre) return alert("El nombre es obligatorio.");
+    upsertBarbero(barberiaSel, payload, editing?.originalId);
+    setEditing(null);
+    setCreating(null);
+    setIsDialogOpen(false);
+  };
 
-  const especialidadesDisponibles = [
-    "Corte Clásico",
-    "Corte Moderno",
-    "Corte Mujer",
-    "Barba",
-    "Afeitado",
-    "Peinados",
-    "Tratamientos",
-    "Diseño",
-    "Color",
-  ]
+  const onAvatarChange = async (file?: File) => {
+    if (!file) return;
+    const dataUrl = await fileToDataURL(file);
+    if (editing) setEditing({ ...editing, data: { ...editing.data, avatar: dataUrl } });
+    if (creating) setCreating({ ...creating, avatar: dataUrl });
+  };
 
-  const updateBarbero = (id: number, field: string, value: any) => {
-    setBarberos((prev) => prev.map((barbero) => (barbero.id === id ? { ...barbero, [field]: value } : barbero)))
-  }
+  const goToReservasConBarbero = (b: Barbero) => {
+    // navegamos al home con la sección reservas y el barbero/barbería preseleccionados
+    const url = `/?section=reservas&barbero=${encodeURIComponent(b.nombre)}&barberia=${barberiaSel}`;
+    router.push(url);
+  };
 
-  const addNewBarbero = () => {
-    if (newBarbero.nombre && newBarbero.email) {
-      const newId = Math.max(...barberos.map((b) => b.id)) + 1
-      setBarberos((prev) => [
-        ...prev,
-        {
-          ...newBarbero,
-          id: newId,
-          rating: 4.5,
-          citasHoy: 0,
-          citasSemana: 0,
-          estado: "activo",
-          avatar: "/placeholder.svg",
-        },
-      ])
-      setNewBarbero({
-        nombre: "",
-        email: "",
-        telefono: "",
-        direccion: "",
-        especialidades: [],
-        experiencia: "",
-        horarioInicio: "09:00",
-        horarioFin: "18:00",
-        biografia: "",
-        salario: 0,
-        comision: 0,
-      })
-      setIsDialogOpen(false)
+  const openWhatsApp = (b: Barbero) => {
+    const wa = (b.whatsapp || b.telefono || "").toString();
+    if (!wa) {
+      alert("Este barbero no tiene WhatsApp configurado.");
+      return;
     }
-  }
-
-  const deleteBarbero = (id: number) => {
-    setBarberos((prev) => prev.filter((barbero) => barbero.id !== id))
-  }
-
-  const getEstadoBadge = (estado: string) => {
-    switch (estado) {
-      case "activo":
-        return <Badge className="bg-green-100 text-green-800">Activo</Badge>
-      case "descanso":
-        return <Badge className="bg-yellow-100 text-yellow-800">Descanso</Badge>
-      case "inactivo":
-        return <Badge className="bg-red-100 text-red-800">Inactivo</Badge>
-      default:
-        return <Badge>{estado}</Badge>
-    }
-  }
-
-  const filteredBarberos = barberos.filter(
-    (barbero) =>
-      barbero.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      barbero.especialidades.some((esp) => esp.toLowerCase().includes(searchTerm.toLowerCase())),
-  )
+    const msg = `Hola ${b.nombre}, me gustaría reservar una cita.`;
+    const link = `https://wa.me/${wa.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(msg)}`;
+    window.open(link, "_blank");
+  };
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Barberos</h1>
-          <p className="text-muted-foreground">Gestiona tu equipo de profesionales</p>
+        <div className="flex items-center gap-2">
+          <div>
+            <h1 className="text-3xl font-bold">Barberos</h1>
+            <p className="text-muted-foreground">
+              Gestiona tu equipo de profesionales {isAdmin ? null : (
+                <span className="inline-flex items-center gap-1 text-amber-600 ml-2">
+                  <LockKeyhole className="h-4 w-4" /> Vista de solo lectura
+                </span>
+              )}
+            </p>
+          </div>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Nuevo Barbero
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Nuevo Barbero</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="nombre">Nombre Completo</Label>
-                  <Input
-                    id="nombre"
-                    placeholder="Nombre del barbero"
-                    value={newBarbero.nombre}
-                    onChange={(e) => setNewBarbero((prev) => ({ ...prev, nombre: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="barbero@email.com"
-                    value={newBarbero.email}
-                    onChange={(e) => setNewBarbero((prev) => ({ ...prev, email: e.target.value }))}
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="telefono">Teléfono</Label>
-                  <Input
-                    id="telefono"
-                    placeholder="+34 666 123 456"
-                    value={newBarbero.telefono}
-                    onChange={(e) => setNewBarbero((prev) => ({ ...prev, telefono: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="experiencia">Años de Experiencia</Label>
-                  <Input
-                    id="experiencia"
-                    placeholder="5 años"
-                    value={newBarbero.experiencia}
-                    onChange={(e) => setNewBarbero((prev) => ({ ...prev, experiencia: e.target.value }))}
-                  />
-                </div>
-              </div>
+        <div className="flex gap-3">
+          <Select value={barberiaSel} onValueChange={(v: BarberiaID) => setBarberiaSel(v)}>
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Barbería" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="principal">Barbería Central</SelectItem>
+              <SelectItem value="norte">Barbería Norte</SelectItem>
+              <SelectItem value="sur">Barbería Sur</SelectItem>
+            </SelectContent>
+          </Select>
 
-              <div>
-                <Label htmlFor="direccion">Dirección</Label>
-                <Input
-                  id="direccion"
-                  placeholder="Calle, número, ciudad"
-                  value={newBarbero.direccion}
-                  onChange={(e) => setNewBarbero((prev) => ({ ...prev, direccion: e.target.value }))}
-                />
-              </div>
+          {isAdmin && (
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={startCreate}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nuevo Barbero
+                </Button>
+              </DialogTrigger>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="horarioInicio">Horario Inicio</Label>
-                  <Input
-                    id="horarioInicio"
-                    type="time"
-                    value={newBarbero.horarioInicio}
-                    onChange={(e) => setNewBarbero((prev) => ({ ...prev, horarioInicio: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="horarioFin">Horario Fin</Label>
-                  <Input
-                    id="horarioFin"
-                    type="time"
-                    value={newBarbero.horarioFin}
-                    onChange={(e) => setNewBarbero((prev) => ({ ...prev, horarioFin: e.target.value }))}
-                  />
-                </div>
-              </div>
+              {(editing || creating) && (
+                <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>{editing ? "Editar Barbero" : "Nuevo Barbero"}</DialogTitle>
+                  </DialogHeader>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="salario">Salario Base (€)</Label>
-                  <Input
-                    id="salario"
-                    type="number"
-                    placeholder="2000"
-                    value={newBarbero.salario || ""}
-                    onChange={(e) => setNewBarbero((prev) => ({ ...prev, salario: Number(e.target.value) }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="comision">Comisión (%)</Label>
-                  <Input
-                    id="comision"
-                    type="number"
-                    placeholder="15"
-                    value={newBarbero.comision || ""}
-                    onChange={(e) => setNewBarbero((prev) => ({ ...prev, comision: Number(e.target.value) }))}
-                  />
-                </div>
-              </div>
+                  {(() => {
+                    const b = (editing ? editing.data : (creating as Barbero)) as Barbero;
+                    const update = (patch: Partial<Barbero>) =>
+                      editing
+                        ? setEditing({ ...editing, data: { ...editing.data, ...patch } })
+                        : setCreating({ ...(creating as Barbero), ...patch });
 
-              <div>
-                <Label htmlFor="biografia">Biografía</Label>
-                <Textarea
-                  id="biografia"
-                  placeholder="Descripción profesional del barbero"
-                  value={newBarbero.biografia}
-                  onChange={(e) => setNewBarbero((prev) => ({ ...prev, biografia: e.target.value }))}
-                />
-              </div>
+                    return (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-4">
+                          <Avatar className="h-16 w-16">
+                            <AvatarImage src={b.avatar || "/placeholder.svg"} />
+                            <AvatarFallback>
+                              {b.nombre ? b.nombre.split(" ").map((n) => n[0]).join("") : "BP"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <input
+                              id="avatar"
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => onAvatarChange(e.target.files?.[0])}
+                            />
+                            <Label htmlFor="avatar" className="cursor-pointer inline-flex items-center gap-2 text-sm underline">
+                              <ImagePlus className="w-4 h-4" /> Subir/Actualizar foto
+                            </Label>
+                          </div>
+                        </div>
 
-              <div>
-                <Label>Especialidades</Label>
-                <div className="grid grid-cols-3 gap-2 mt-2">
-                  {especialidadesDisponibles.map((esp) => (
-                    <label key={esp} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        className="rounded"
-                        checked={newBarbero.especialidades.includes(esp)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setNewBarbero((prev) => ({ ...prev, especialidades: [...prev.especialidades, esp] }))
-                          } else {
-                            setNewBarbero((prev) => ({
-                              ...prev,
-                              especialidades: prev.especialidades.filter((s) => s !== esp),
-                            }))
-                          }
-                        }}
-                      />
-                      <span className="text-sm">{esp}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <Button className="w-full" onClick={addNewBarbero}>
-                Agregar Barbero
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <Label>Nombre</Label>
+                            <Input value={b.nombre} onChange={(e) => update({ nombre: e.target.value })} />
+                          </div>
+                          <div>
+                            <Label>Email</Label>
+                            <Input type="email" value={b.email ?? ""} onChange={(e) => update({ email: e.target.value })} />
+                          </div>
+                          <div>
+                            <Label>Teléfono</Label>
+                            <Input value={b.telefono ?? ""} onChange={(e) => update({ telefono: e.target.value })} />
+                          </div>
+                          <div>
+                            <Label>WhatsApp</Label>
+                            <Input value={b.whatsapp ?? ""} onChange={(e) => update({ whatsapp: e.target.value })} />
+                          </div>
+                          <div className="md:col-span-2">
+                            <Label>Dirección</Label>
+                            <Input value={b.direccion ?? ""} onChange={(e) => update({ direccion: e.target.value })} />
+                          </div>
+                          <div>
+                            <Label>Horario</Label>
+                            <Input placeholder="09:00 - 18:00" value={b.horario ?? ""} onChange={(e) => update({ horario: e.target.value })} />
+                          </div>
+                          <div>
+                            <Label>Especialidad principal</Label>
+                            <Input value={b.especialidad ?? ""} onChange={(e) => update({ especialidad: e.target.value })} />
+                          </div>
+                          <div>
+                            <Label>Especialidades (separadas por coma)</Label>
+                            <Input
+                              value={(b.especialidades || []).join(", ")}
+                              onChange={(e) =>
+                                update({ especialidades: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })
+                              }
+                            />
+                          </div>
+                          <div>
+                            <Label>Rating</Label>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              min={0}
+                              max={5}
+                              value={b.rating ?? 0}
+                              onChange={(e) => update({ rating: Number(e.target.value) })}
+                            />
+                          </div>
+                          <div>
+                            <Label>Estado</Label>
+                            <Select
+                              value={(b.estado ?? (b.disponible ? "Activo" : "Descanso")) as EstadoBarbero}
+                              onValueChange={(v: EstadoBarbero) => update({ estado: v, disponible: v === "Activo" })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Activo">Activo</SelectItem>
+                                <SelectItem value="Descanso">Descanso</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Citas hoy</Label>
+                            <Input type="number" value={b.hoy ?? 0} onChange={(e) => update({ hoy: Number(e.target.value) })} />
+                          </div>
+                          <div>
+                            <Label>Citas semana</Label>
+                            <Input type="number" value={b.semana ?? 0} onChange={(e) => update({ semana: Number(e.target.value) })} />
+                          </div>
+                          <div>
+                            <Label>Experiencia (años)</Label>
+                            <Input
+                              type="number"
+                              value={b.experienciaAnios ?? 0}
+                              onChange={(e) => update({ experienciaAnios: Number(e.target.value) })}
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <Label>Bio</Label>
+                            <Textarea
+                              value={b.biografia ?? ""}
+                              onChange={(e) => update({ biografia: e.target.value })}
+                              placeholder="(opcional)"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                          <Button className="flex-1" onClick={saveBarbero}>
+                            <Save className="w-4 h-4 mr-2" /> Guardar
+                          </Button>
+                          <Button variant="outline" onClick={() => { setEditing(null); setCreating(null); setIsDialogOpen(false); }}>
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </DialogContent>
+              )}
+            </Dialog>
+          )}
+        </div>
       </div>
 
       {/* Buscador */}
       <Card>
         <CardContent className="pt-6">
-          <div className="relative">
-            <Input
-              placeholder="Buscar barberos por nombre o especialidad..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
+          <Input
+            placeholder="Buscar barberos por nombre o especialidad..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </CardContent>
       </Card>
 
-      {/* Lista de Barberos */}
+      {/* Lista */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredBarberos.map((barbero) => (
-          <Card key={barbero.id}>
+        {filtered.map((b) => (
+          <Card key={b.id}>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <Avatar className="h-16 w-16">
-                    <AvatarImage src={barbero.avatar || "/placeholder.svg"} alt={barbero.nombre} />
+                    <AvatarImage src={b.avatar || "/placeholder.svg"} alt={b.nombre} />
                     <AvatarFallback>
-                      {barbero.nombre
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
+                      {b.nombre ? b.nombre.split(" ").map((n) => n[0]).join("") : "BP"}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    {editingBarbero === barbero.id ? (
-                      <Input
-                        value={barbero.nombre}
-                        onChange={(e) => updateBarbero(barbero.id, "nombre", e.target.value)}
-                        className="text-lg font-semibold"
-                      />
-                    ) : (
-                      <CardTitle className="text-lg">{barbero.nombre}</CardTitle>
-                    )}
+                    <CardTitle className="text-lg">{b.nombre}</CardTitle>
                     <div className="flex items-center space-x-1 mt-1">
                       <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      <span className="text-sm font-medium">{barbero.rating}</span>
+                      <span className="text-sm font-medium">
+                        {Number(b.rating ?? 0).toFixed(1)}
+                      </span>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {getEstadoBadge(barbero.estado)}
-                  {editingBarbero === barbero.id && (
-                    <Select
-                      value={barbero.estado}
-                      onValueChange={(value) => updateBarbero(barbero.id, "estado", value)}
-                    >
-                      <SelectTrigger className="w-24">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="activo">Activo</SelectItem>
-                        <SelectItem value="descanso">Descanso</SelectItem>
-                        <SelectItem value="inactivo">Inactivo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
+                {getEstadoBadge(b.estado, b.disponible)}
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                  <Mail className="w-4 h-4" />
-                  {editingBarbero === barbero.id ? (
-                    <Input
-                      value={barbero.email}
-                      onChange={(e) => updateBarbero(barbero.id, "email", e.target.value)}
-                      className="text-sm"
-                    />
-                  ) : (
-                    <span>{barbero.email}</span>
-                  )}
-                </div>
-                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                  <Phone className="w-4 h-4" />
-                  {editingBarbero === barbero.id ? (
-                    <Input
-                      value={barbero.telefono}
-                      onChange={(e) => updateBarbero(barbero.id, "telefono", e.target.value)}
-                      className="text-sm"
-                    />
-                  ) : (
-                    <span>{barbero.telefono}</span>
-                  )}
-                </div>
-                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                  <MapPin className="w-4 h-4" />
-                  {editingBarbero === barbero.id ? (
-                    <Input
-                      value={barbero.direccion}
-                      onChange={(e) => updateBarbero(barbero.id, "direccion", e.target.value)}
-                      className="text-sm"
-                    />
-                  ) : (
-                    <span>{barbero.direccion}</span>
-                  )}
-                </div>
-                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                  <Calendar className="w-4 h-4" />
-                  {editingBarbero === barbero.id ? (
-                    <div className="flex gap-2">
-                      <Input
-                        type="time"
-                        value={barbero.horarioInicio}
-                        onChange={(e) => updateBarbero(barbero.id, "horarioInicio", e.target.value)}
-                        className="w-20"
-                      />
-                      <span>-</span>
-                      <Input
-                        type="time"
-                        value={barbero.horarioFin}
-                        onChange={(e) => updateBarbero(barbero.id, "horarioFin", e.target.value)}
-                        className="w-20"
-                      />
-                    </div>
-                  ) : (
-                    <span>
-                      {barbero.horarioInicio} - {barbero.horarioFin}
-                    </span>
-                  )}
-                </div>
-              </div>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2"><Mail className="w-4 h-4" /> {b.email ?? "—"}</div>
+              <div className="flex items-center gap-2"><Phone className="w-4 h-4" /> {b.telefono ?? "—"}</div>
+              <div className="flex items-center gap-2"><MapPin className="w-4 h-4" /> {b.direccion ?? "—"}</div>
+              <div className="flex items-center gap-2"><Calendar className="w-4 h-4" /> {b.horario ?? "—"}</div>
 
-              {editingBarbero === barbero.id && (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-xs">Salario (€)</Label>
-                      <Input
-                        type="number"
-                        value={barbero.salario}
-                        onChange={(e) => updateBarbero(barbero.id, "salario", Number(e.target.value))}
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Comisión (%)</Label>
-                      <Input
-                        type="number"
-                        value={barbero.comision}
-                        onChange={(e) => updateBarbero(barbero.id, "comision", Number(e.target.value))}
-                      />
-                    </div>
+              {b.especialidades?.length ? (
+                <div>
+                  <p className="text-xs mb-1">Especialidades</p>
+                  <div className="flex flex-wrap gap-1">
+                    {b.especialidades.map((e) => (
+                      <Badge key={e} variant="secondary" className="text-xs">
+                        {e}
+                      </Badge>
+                    ))}
                   </div>
-                  <div>
-                    <Label className="text-xs">Biografía</Label>
-                    <Textarea
-                      value={barbero.biografia}
-                      onChange={(e) => updateBarbero(barbero.id, "biografia", e.target.value)}
-                      className="text-sm"
-                    />
-                  </div>
+                </div>
+              ) : null}
+
+              {/* Acciones */}
+              {isAdmin ? (
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => {
+                      setIsDialogOpen(true);
+                      setEditing({ originalId: b.id, data: { ...b } });
+                    }}
+                  >
+                    <Edit className="w-4 h-4 mr-1" /> Editar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 border-red-200"
+                    onClick={() => {
+                      if (confirm(`¿Eliminar a ${b.nombre}?`)) eliminarBarbero(barberiaSel, b.id);
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => goToReservasConBarbero(b)}
+                    title="Enviar solicitud de cita al administrador"
+                  >
+                    <Calendar className="w-4 h-4 mr-1" /> Pedir cita
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                    onClick={() => openWhatsApp(b)}
+                    title="Chatear por WhatsApp"
+                  >
+                    <MessageSquare className="w-4 h-4 mr-1" /> WhatsApp
+                  </Button>
                 </div>
               )}
 
-              <div>
-                <p className="text-sm font-medium mb-2">Especialidades</p>
-                <div className="flex flex-wrap gap-1">
-                  {barbero.especialidades.map((esp) => (
-                    <Badge key={esp} variant="secondary" className="text-xs">
-                      {esp}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div>
-                  <p className="text-2xl font-bold text-primary">{barbero.citasHoy}</p>
-                  <p className="text-xs text-muted-foreground">Hoy</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-primary">{barbero.citasSemana}</p>
-                  <p className="text-xs text-muted-foreground">Semana</p>
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-primary">{barbero.experiencia}</p>
-                  <p className="text-xs text-muted-foreground">Exp.</p>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                {editingBarbero === barbero.id ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 bg-transparent"
-                      onClick={() => setEditingBarbero(null)}
-                    >
-                      <Save className="w-4 h-4 mr-2" />
-                      Guardar
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => setEditingBarbero(null)}>
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 bg-transparent"
-                      onClick={() => setEditingBarbero(barbero.id)}
-                    >
-                      <Edit className="w-4 h-4 mr-2" />
-                      Editar
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => deleteBarbero(barbero.id)}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </>
-                )}
-              </div>
+              {!isAdmin && (
+                <p className="mt-2 text-xs text-amber-700">
+                  Edición disponible solo para el administrador
+                </p>
+              )}
             </CardContent>
           </Card>
         ))}
       </div>
     </div>
-  )
+  );
 }
