@@ -1,6 +1,7 @@
 // app/panel/page.tsx
 "use client";
 
+import { Suspense } from "react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
@@ -18,6 +19,9 @@ import { Clientes } from "@/components/clientes";
 import { Reportes } from "@/components/reportes";
 import { Configuracion } from "@/components/configuracion";
 
+// Evita SSG/ISR cuando hay uso de search params
+export const dynamic = "force-dynamic"; // alternativamente: export const revalidate = 0;
+
 type BarberiaIDView = "principal" | "norte" | "sur" | "todas";
 type Section =
   | "dashboard"
@@ -29,7 +33,8 @@ type Section =
   | "reportes"
   | "configuracion";
 
-export default function Panel() {
+// --- Componente con la lógica que usa useSearchParams, envuelto en Suspense ---
+function PanelCore() {
   const { isAuthenticated, user, role } = useAuth();
   const [activeSection, setActiveSection] = useState<Section>("reservas");
 
@@ -81,5 +86,14 @@ export default function Panel() {
       <Sidebar activeSection={activeSection} setActiveSection={setActiveSection} />
       <main className="flex-1 overflow-auto">{renderContent()}</main>
     </div>
+  );
+}
+
+// --- Página: solo actúa como boundary de Suspense ---
+export default function Panel() {
+  return (
+    <Suspense fallback={<div className="p-6">Cargando panel…</div>}>
+      <PanelCore />
+    </Suspense>
   );
 }
