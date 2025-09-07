@@ -2,55 +2,124 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Variables en oklch/hsl como las definiste */
-:root {
-  --background: 0% 0 0; /* placeholder: pon aquí tus valores reales en HSL, o guarda oklch y conviertes a HSL */
-  --foreground: 0% 0 0;
-  --card: 0% 0 100%;
-  --card-foreground: 0% 0 0;
-  --popover: 0% 0 100%;
-  --popover-foreground: 0% 0 0;
-  --primary: 0% 0 0;
-  --primary-foreground: 100% 0 100%;
-  --secondary: 50% 50% 264;
-  --secondary-foreground: 100% 0 100%;
-  --muted: 97% 0 0;
-  --muted-foreground: 55% 0 0;
-  --accent: 50% 50% 264;
-  --accent-foreground: 100% 0 100%;
-  --destructive: 58% 50% 27;
-  --destructive-foreground: 100% 0 100%;
-  --border: 92% 0 0;
-  --input: 98% 0 0;
-  --ring: 50% 50% 264;
-  --chart-1: 50% 50% 264;
-  --chart-2: 60% 20% 280;
-  --chart-3: 70% 15% 290;
-  --chart-4: 80% 10% 300;
-  --chart-5: 85% 5% 310;
-  --radius: 0.5rem;
+/* ====== PALETA FUTURISTA (Neon Barber) ======
+   Formato H S% L% para usar con hsl(var(--token)) */
+:root{
+  /* Base más clara (navy suave) */
+  --background: 230 25% 14%;
+  --foreground: 210 40% 98%;
 
-  --sidebar: 98% 0 0;
-  --sidebar-foreground: 20% 0 0;
-  --sidebar-primary: 100% 0 0;
-  --sidebar-primary-foreground: 20% 0 0;
-  --sidebar-accent: 50% 50% 264;
-  --sidebar-accent-foreground: 100% 0 100%;
-  --sidebar-border: 92% 0 0;
-  --sidebar-ring: 50% 50% 264;
+  /* Superficies */
+  --card: 232 22% 18%;
+  --card-foreground: var(--foreground);
+  --popover: 232 22% 18%;
+  --popover-foreground: var(--foreground);
+
+  /* Marca (neón púrpura/índigo) */
+  --primary: 265 86% 60%;
+  --primary-foreground: 0 0% 100%;
+
+  /* Acentos fríos */
+  --secondary: 200 95% 58%;
+  --secondary-foreground: 210 40% 98%;
+  --accent: 185 90% 52%;
+  --accent-foreground: 210 40% 98%;
+
+  /* Estados */
+  --destructive: 0 84% 58%;
+  --destructive-foreground: 0 0% 98%;
+
+  /* Bordes/inputs/anillos (un poco más claros) */
+  --muted: 232 16% 24%;
+  --muted-foreground: 215 16% 78%;
+  --border: 232 18% 28%;
+  --input: 232 18% 28%;
+  --ring: 265 86% 60%;
+
+  /* Charts */
+  --chart-1: 265 86% 60%;
+  --chart-2: 200 95% 58%;
+  --chart-3: 185 90% 52%;
+  --chart-4: 15 90% 62%;
+  --chart-5: 48 95% 58%;
+
+  --radius: 0.75rem;
+
+  /* Sidebar */
+  --sidebar: 232 22% 18%;
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: 232 16% 24%;
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
-.dark {
-  /* tus valores dark */
-}
-
-/* Base utilities en v3 (sin outline-ring/50) */
+/* ====== BASE con Tailwind ====== */
 @layer base {
-  /* Ya debería existir la clase border-border porque la define tailwind.config */
   * { @apply border-border; }
-
-  /* Para anillos de enfoque “estilo shadcn” */
   *:focus-visible { @apply outline-none ring-2 ring-ring/50 ring-offset-2 ring-offset-background; }
-
   body { @apply bg-background text-foreground; }
+}
+
+/* ====== FIXES responsive ====== */
+html, body { width: 100%; overflow-x: hidden; }
+img, svg, video, canvas, iframe { max-width: 100%; height: auto; }
+
+/* ====== UTILIDADES DE ESTILO ====== */
+@layer utilities {
+  /* Fondo futurista en capas (radiales + textura + conic) */
+  .future-bg {
+    background-color: hsl(var(--background));
+    background-image:
+      /* halo púrpura */
+      radial-gradient(70rem 46rem at 85% -10%, hsl(265 86% 45% / .25), transparent 55%),
+      /* halo cyan */
+      radial-gradient(50rem 36rem at 15% -10%, hsl(200 95% 45% / .22), transparent 58%),
+      /* halo teal inferior */
+      radial-gradient(90rem 70rem at 50% 115%, hsl(185 90% 35% / .18), transparent 60%),
+      /* leve textura diagonal “industrial” */
+      repeating-linear-gradient(135deg,
+        hsl(232 18% 18% / .30) 0 10px,
+        hsl(232 18% 16% / .30) 10px 20px
+      ),
+      /* base conic sutil */
+      conic-gradient(from 180deg at 50% 50%,
+        hsl(230 24% 16%),
+        hsl(232 22% 14%),
+        hsl(230 24% 16%)
+      );
+    background-attachment: fixed;
+  }
+
+  /* Tarjetas glassmorphism (añádela a tus <Card className="glass ...">) */
+  .glass {
+    @apply bg-white/10 border-white/15 backdrop-blur-md;
+  }
+
+  /* Contenedor con padding lateral */
+  .page-container {
+    @apply w-full max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Botón estilo “neón” reutilizable */
+  .btn-neon {
+    @apply relative inline-flex items-center justify-center rounded-xl px-4 py-2 font-semibold text-sm text-white;
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(200 95% 58%) 100%);
+    transition: filter .2s ease;
+  }
+  .btn-neon::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    background: radial-gradient(120% 120% at 50% 50%, hsl(var(--primary)) 0%, transparent 55%);
+    filter: blur(14px);
+    opacity: .6;
+    z-index: -1;
+    border-radius: inherit;
+  }
+  .btn-neon:hover {
+    filter: brightness(1.06);
+  }
 }

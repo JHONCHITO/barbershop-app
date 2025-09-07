@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+// 🔁 quitamos Badge de shadcn para evitar choques de tipos
+// import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -33,7 +34,7 @@ import {
   Save,
   X,
 } from "lucide-react";
-import { useAuth } from "@/contexts/auth-context"; // 👈 auto-detecta rol
+import { useAuth } from "@/contexts/auth-context";
 
 type Categoria = "corte" | "barba" | "combo" | "tratamiento";
 type CategoriaFiltro = "todos" | Categoria;
@@ -49,82 +50,69 @@ type ServicioData = {
   popularidad: number; // 0-100
 };
 
+// Utilidad pequeña para COP
+const fmtCOP = (n: number) =>
+  new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
+
+// Etiquetas simples en lugar de Badge (evitamos tipos de shadcn según tu setup)
+function Pill({
+  children,
+  className = "",
+  title,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <span
+      title={title}
+      className={
+        "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium " +
+        className
+      }
+    >
+      {children}
+    </span>
+  );
+}
+
+function CategoryPill({ categoria }: { categoria: Categoria }) {
+  const map: Record<Categoria, string> = {
+    corte: "bg-blue-100/70 text-blue-900",
+    barba: "bg-green-100/70 text-green-900",
+    combo: "bg-purple-100/70 text-purple-900",
+    tratamiento: "bg-orange-100/70 text-orange-900",
+  };
+  const label = categoria.charAt(0).toUpperCase() + categoria.slice(1);
+  return <Pill className={map[categoria]}>{label}</Pill>;
+}
+
+function PopularityPill({ value }: { value: number }) {
+  if (value >= 80) return <Pill className="bg-green-100/70 text-green-900">Popular</Pill>;
+  if (value >= 60) return <Pill className="bg-yellow-100/70 text-yellow-900">Moderado</Pill>;
+  return <Pill className="bg-red-100/70 text-red-900">Bajo</Pill>;
+}
+
 export function Servicios({ isAdmin = false }: { isAdmin?: boolean }) {
-  // Detecta rol desde el contexto; si además pasan isAdmin, también lo considera
   const { role } = useAuth();
   const admin = isAdmin || role === "admin";
 
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState<string>("");
   const [filterCategory, setFilterCategory] = useState<CategoriaFiltro>("todos");
   const [editingService, setEditingService] = useState<number | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
 
   const [servicios, setServicios] = useState<ServicioData[]>([
-    {
-      id: 1,
-      nombre: "Corte Clásico Hombre",
-      descripcion: "Corte tradicional con tijeras y máquina",
-      precio: 80000,
-      duracion: 30,
-      categoria: "corte",
-      activo: true,
-      popularidad: 95,
-    },
-    {
-      id: 2,
-      nombre: "Corte + Barba",
-      descripcion: "Corte completo con arreglo de barba",
-      precio: 100000,
-      duracion: 45,
-      categoria: "combo",
-      activo: true,
-      popularidad: 88,
-    },
-    {
-      id: 3,
-      nombre: "Barba Completa",
-      descripcion: "Arreglo y perfilado de barba",
-      precio: 60000,
-      duracion: 20,
-      categoria: "barba",
-      activo: true,
-      popularidad: 75,
-    },
-    {
-      id: 4,
-      nombre: "Corte Cabello Dama",
-      descripcion: "Corte y peinado profesional para mujeres",
-      precio: 140000,
-      duracion: 60,
-      categoria: "corte",
-      activo: true,
-      popularidad: 82,
-    },
-    {
-      id: 5,
-      nombre: "Afeitado Clásico",
-      descripcion: "Afeitado tradicional con navaja",
-      precio: 72000,
-      duracion: 25,
-      categoria: "barba",
-      activo: true,
-      popularidad: 65,
-    },
-    {
-      id: 6,
-      nombre: "Tratamiento Capilar",
-      descripcion: "Tratamiento nutritivo para el cabello",
-      precio: 140000,
-      duracion: 40,
-      categoria: "tratamiento",
-      activo: false,
-      popularidad: 45,
-    },
+    { id: 1, nombre: "Corte Clásico Hombre", descripcion: "Corte tradicional con tijeras y máquina", precio: 80000, duracion: 30, categoria: "corte", activo: true, popularidad: 95 },
+    { id: 2, nombre: "Corte + Barba", descripcion: "Corte completo con arreglo de barba", precio: 100000, duracion: 45, categoria: "combo", activo: true, popularidad: 88 },
+    { id: 3, nombre: "Barba Completa", descripcion: "Arreglo y perfilado de barba", precio: 60000, duracion: 20, categoria: "barba", activo: true, popularidad: 75 },
+    { id: 4, nombre: "Corte Cabello Dama", descripcion: "Corte y peinado profesional para mujeres", precio: 140000, duracion: 60, categoria: "corte", activo: true, popularidad: 82 },
+    { id: 5, nombre: "Afeitado Clásico", descripcion: "Afeitado tradicional con navaja", precio: 72000, duracion: 25, categoria: "barba", activo: true, popularidad: 65 },
+    { id: 6, nombre: "Tratamiento Capilar", descripcion: "Tratamiento nutritivo para el cabello", precio: 140000, duracion: 40, categoria: "tratamiento", activo: false, popularidad: 45 },
   ]);
 
-  const [newService, setNewService] = useState<
-    Omit<ServicioData, "id" | "popularidad">
-  >({
+  const [newService, setNewService] = useState<Omit<ServicioData, "id" | "popularidad">>({
     nombre: "",
     descripcion: "",
     precio: 0,
@@ -141,15 +129,14 @@ export function Servicios({ isAdmin = false }: { isAdmin?: boolean }) {
     { value: "tratamiento", label: "Tratamientos" },
   ];
 
-  /* ---------------- helpers de edición (solo admin) ---------------- */
-  const updateService = (
+  const updateService = <K extends keyof ServicioData>(
     id: number,
-    field: keyof ServicioData,
-    value: any
+    field: K,
+    value: ServicioData[K]
   ) => {
     if (!admin) return;
-    setServicios((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, [field]: value } : s))
+    setServicios((prev: ServicioData[]) =>
+      prev.map((s: ServicioData) => (s.id === id ? { ...s, [field]: value } : s))
     );
   };
 
@@ -157,12 +144,8 @@ export function Servicios({ isAdmin = false }: { isAdmin?: boolean }) {
     if (!admin) return;
     if (newService.nombre && newService.categoria) {
       const maxId = servicios.length ? Math.max(...servicios.map((s) => s.id)) : 0;
-      const nuevo: ServicioData = {
-        ...newService,
-        id: maxId + 1,
-        popularidad: 50,
-      };
-      setServicios((prev) => [...prev, nuevo]);
+      const nuevo: ServicioData = { ...newService, id: maxId + 1, popularidad: 50 };
+      setServicios((prev: ServicioData[]) => [...prev, nuevo]);
       setNewService({
         nombre: "",
         descripcion: "",
@@ -177,61 +160,38 @@ export function Servicios({ isAdmin = false }: { isAdmin?: boolean }) {
 
   const deleteService = (id: number) => {
     if (!admin) return;
-    setServicios((prev) => prev.filter((s) => s.id !== id));
+    setServicios((prev: ServicioData[]) => prev.filter((s: ServicioData) => s.id !== id));
   };
 
-  const getCategoryBadge = (categoria: Categoria) => {
-    const colors: Record<Categoria, string> = {
-      corte: "bg-blue-100 text-blue-800",
-      barba: "bg-green-100 text-green-800",
-      combo: "bg-purple-100 text-purple-800",
-      tratamiento: "bg-orange-100 text-orange-800",
-    };
-    return (
-      <Badge className={colors[categoria]}>
-        {categoria.charAt(0).toUpperCase() + categoria.slice(1)}
-      </Badge>
-    );
-  };
-
-  const getPopularityBadge = (popularidad: number) => {
-    if (popularidad >= 80)
-      return <Badge className="bg-green-100 text-green-800">Popular</Badge>;
-    if (popularidad >= 60)
-      return <Badge className="bg-yellow-100 text-yellow-800">Moderado</Badge>;
-    return <Badge className="bg-red-100 text-red-800">Bajo</Badge>;
-  };
-
-  const filteredServicios = servicios.filter((servicio) => {
+  const filteredServicios = servicios.filter((servicio: ServicioData) => {
+    const q = searchTerm.toLowerCase();
     const matchesSearch =
-      servicio.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      servicio.descripcion.toLowerCase().includes(searchTerm.toLowerCase());
+      servicio.nombre.toLowerCase().includes(q) ||
+      servicio.descripcion.toLowerCase().includes(q);
     const matchesCategory =
       filterCategory === "todos" || servicio.categoria === filterCategory;
     return matchesSearch && matchesCategory;
   });
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Servicios</h1>
-          <p className="text-muted-foreground">
-            Gestiona los servicios de tu barbería
-          </p>
+          <h1 className="text-2xl sm:text-3xl font-bold">Servicios</h1>
+          <p className="text-muted-foreground">Gestiona los servicios de tu barbería</p>
         </div>
 
-        {/* Botón y diálogo SOLO admin */}
         {admin && (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="self-start sm:self-auto">
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo Servicio
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            {/* glass en el diálogo */}
+            <DialogContent className="max-w-md glass border">
               <DialogHeader>
                 <DialogTitle>Nuevo Servicio</DialogTitle>
               </DialogHeader>
@@ -258,18 +218,19 @@ export function Servicios({ isAdmin = false }: { isAdmin?: boolean }) {
                     }
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="precio">Precio (COP)</Label>
                     <Input
                       id="precio"
                       type="number"
+                      inputMode="numeric"
                       placeholder="80000"
                       value={newService.precio || ""}
                       onChange={(e) =>
                         setNewService((p) => ({
                           ...p,
-                          precio: Number(e.target.value),
+                          precio: Number(e.target.value || 0),
                         }))
                       }
                     />
@@ -279,12 +240,13 @@ export function Servicios({ isAdmin = false }: { isAdmin?: boolean }) {
                     <Input
                       id="duracion"
                       type="number"
+                      inputMode="numeric"
                       placeholder="30"
                       value={newService.duracion || ""}
                       onChange={(e) =>
                         setNewService((p) => ({
                           ...p,
-                          duracion: Number(e.target.value),
+                          duracion: Number(e.target.value || 0),
                         }))
                       }
                     />
@@ -294,8 +256,11 @@ export function Servicios({ isAdmin = false }: { isAdmin?: boolean }) {
                   <Label htmlFor="categoria">Categoría</Label>
                   <Select
                     value={newService.categoria}
-                    onValueChange={(value: Categoria) =>
-                      setNewService((p) => ({ ...p, categoria: value }))
+                    onValueChange={(value) =>
+                      setNewService((p) => ({
+                        ...p,
+                        categoria: value as Categoria,
+                      }))
                     }
                   >
                     <SelectTrigger>
@@ -309,11 +274,11 @@ export function Servicios({ isAdmin = false }: { isAdmin?: boolean }) {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center gap-2">
                   <Switch
                     id="activo"
                     checked={newService.activo}
-                    onCheckedChange={(checked) =>
+                    onCheckedChange={(checked: boolean) =>
                       setNewService((p) => ({ ...p, activo: checked }))
                     }
                   />
@@ -329,21 +294,20 @@ export function Servicios({ isAdmin = false }: { isAdmin?: boolean }) {
       </div>
 
       {/* Filtros */}
-      <Card>
+      <Card className="glass border">
         <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <Input
-                placeholder="Buscar servicios..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+            <Input
+              className="flex-1"
+              placeholder="Buscar servicios..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
             <Select
               value={filterCategory}
-              onValueChange={(v: CategoriaFiltro) => setFilterCategory(v)}
+              onValueChange={(v) => setFilterCategory(v as CategoriaFiltro)}
             >
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-full sm:w-48">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -359,19 +323,22 @@ export function Servicios({ isAdmin = false }: { isAdmin?: boolean }) {
       </Card>
 
       {/* Lista */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredServicios.map((servicio) => {
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        {filteredServicios.map((servicio: ServicioData) => {
           const enEdicion = admin && editingService === servicio.id;
 
           return (
-            <Card key={servicio.id} className={!servicio.activo ? "opacity-60" : ""}>
+            <Card
+              key={servicio.id}
+              className={(servicio.activo ? "" : "opacity-60 ") + "glass border"}
+            >
               <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center shrink-0">
                       <Scissors className="w-6 h-6 text-primary" />
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       {enEdicion ? (
                         <Input
                           value={servicio.nombre}
@@ -381,9 +348,10 @@ export function Servicios({ isAdmin = false }: { isAdmin?: boolean }) {
                           className="text-lg font-semibold"
                         />
                       ) : (
-                        <CardTitle className="text-lg">{servicio.nombre}</CardTitle>
+                        <CardTitle className="text-lg truncate">
+                          {servicio.nombre}
+                        </CardTitle>
                       )}
-
                       {enEdicion ? (
                         <Textarea
                           value={servicio.descripcion}
@@ -397,21 +365,24 @@ export function Servicios({ isAdmin = false }: { isAdmin?: boolean }) {
                           className="text-sm mt-1"
                         />
                       ) : (
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                           {servicio.descripcion}
                         </p>
                       )}
                     </div>
                   </div>
 
-                  {/* Switch (solo admin activo) */}
                   <div className="flex items-center gap-2">
-                    {!servicio.activo && <Badge variant="secondary">Inactivo</Badge>}
+                    {!servicio.activo && (
+                      <Pill className="bg-slate-200/70 text-slate-900">
+                        Inactivo
+                      </Pill>
+                    )}
                     <Switch
                       checked={servicio.activo}
                       onCheckedChange={
                         admin
-                          ? (checked) =>
+                          ? (checked: boolean) =>
                               updateService(servicio.id, "activo", checked)
                           : undefined
                       }
@@ -427,11 +398,11 @@ export function Servicios({ isAdmin = false }: { isAdmin?: boolean }) {
                   {enEdicion ? (
                     <Select
                       value={servicio.categoria}
-                      onValueChange={(v: Categoria) =>
-                        updateService(servicio.id, "categoria", v)
+                      onValueChange={(v) =>
+                        updateService(servicio.id, "categoria", v as Categoria)
                       }
                     >
-                      <SelectTrigger className="w-32">
+                      <SelectTrigger className="w-36">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -442,48 +413,50 @@ export function Servicios({ isAdmin = false }: { isAdmin?: boolean }) {
                       </SelectContent>
                     </Select>
                   ) : (
-                    getCategoryBadge(servicio.categoria)
+                    <CategoryPill categoria={servicio.categoria} />
                   )}
-                  {getPopularityBadge(servicio.popularidad)}
+                  <PopularityPill value={servicio.popularidad} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-center space-x-2">
-                    <DollarSign className="w-4 h-4 text-muted-foreground" />
+                  <div className="flex items-center gap-2 min-w-0">
+                    <DollarSign className="w-4 h-4 text-muted-foreground shrink-0" />
                     {enEdicion ? (
                       <Input
                         type="number"
+                        inputMode="numeric"
                         value={servicio.precio}
                         onChange={(e) =>
                           updateService(
                             servicio.id,
                             "precio",
-                            Number(e.target.value)
+                            Number(e.target.value || 0)
                           )
                         }
-                        className="text-xl font-bold text-primary w-24"
+                        className="text-xl font-bold text-primary"
                       />
                     ) : (
-                      <span className="text-2xl font-bold text-primary">
-                        ${servicio.precio.toLocaleString("es-CO")}
+                      <span className="text-2xl font-bold text-primary truncate">
+                        {fmtCOP(servicio.precio)}
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-muted-foreground" />
                     {enEdicion ? (
                       <div className="flex items-center gap-1">
                         <Input
                           type="number"
+                          inputMode="numeric"
                           value={servicio.duracion}
                           onChange={(e) =>
                             updateService(
                               servicio.id,
                               "duracion",
-                              Number(e.target.value)
+                              Number(e.target.value || 0)
                             )
                           }
-                          className="w-16"
+                          className="max-w-[6rem]"
                         />
                         <span className="text-sm">min</span>
                       </div>
@@ -508,7 +481,6 @@ export function Servicios({ isAdmin = false }: { isAdmin?: boolean }) {
                   </div>
                 </div>
 
-                {/* Botones de edición SOLO admin */}
                 {admin && (
                   <div className="flex gap-2">
                     {enEdicion ? (

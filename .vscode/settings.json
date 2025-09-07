@@ -1,0 +1,21 @@
+{
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "less.lint.unknownAtRules": "ignore",
+
+  // Si todavía ves avisos, activa esta línea:
+  // "css.validate": false,
+
+  "tailwindCSS.emmetCompletions": true,
+  "editor.quickSuggestions": { "strings": true },
+
+  "files.associations": { "*.css": "tailwindcss" },
+
+  "tailwindCSS.includeLanguages": {
+    "css": "tailwindcss",
+    "postcss": "tailwindcss"
+  }
+
+  // Si tu config no la detecta, descomenta:
+  // "tailwindCSS.experimental.configFile": "tailwind.config.js"
+}
