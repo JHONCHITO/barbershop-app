@@ -1,8 +1,9 @@
 // app/layout.tsx
 import type { Metadata, Viewport } from "next";
-import "./globals.css";
+import "../styles/tailwind.css";  // ← primero
+import "./globals.css";           // ← después
 import Providers from "./providers";
-import BackFloating from "@/components/back-floating"; // botón flotante (Atrás/Inicio)
+import BackFloating from "@/components/back-floating";
 
 export const metadata: Metadata = {
   title: "BarberPro | Gestión Profesional",

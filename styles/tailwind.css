@@ -1,0 +1,5 @@
+/* styles/tailwind.css */
+/* Solo las directivas de Tailwind, deben cargarse primero */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
