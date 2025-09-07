@@ -1,10 +1,10 @@
+/* app/globals.css  — CORREGIDO Y COMPATIBLE CON VERCEL */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ====== PALETA FUTURISTA (Neon Barber) ======
-   Formato H S% L% para usar con hsl(var(--token)) */
-:root{
+/* ====== PALETA FUTURISTA (Neon Barber) ====== */
+:root {
   /* Base más clara (navy suave) */
   --background: 230 25% 14%;
   --foreground: 210 40% 98%;
@@ -16,32 +16,32 @@
   --popover-foreground: var(--foreground);
 
   /* Marca (neón púrpura/índigo) */
-  --primary: 265 86% 60%;
+  --primary: 265 86% 58%;
   --primary-foreground: 0 0% 100%;
 
   /* Acentos fríos */
-  --secondary: 200 95% 58%;
+  --secondary: 200 95% 55%;
   --secondary-foreground: 210 40% 98%;
-  --accent: 185 90% 52%;
+  --accent: 185 90% 45%;
   --accent-foreground: 210 40% 98%;
 
   /* Estados */
-  --destructive: 0 84% 58%;
+  --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
 
-  /* Bordes/inputs/anillos (un poco más claros) */
-  --muted: 232 16% 24%;
-  --muted-foreground: 215 16% 78%;
-  --border: 232 18% 28%;
-  --input: 232 18% 28%;
-  --ring: 265 86% 60%;
+  /* Bordes/inputs/anillos */
+  --muted: 232 12% 22%;
+  --muted-foreground: 215 16% 76%;
+  --border: 232 14% 26%;
+  --input: 232 14% 26%;
+  --ring: 265 86% 58%;
 
   /* Charts */
-  --chart-1: 265 86% 60%;
-  --chart-2: 200 95% 58%;
-  --chart-3: 185 90% 52%;
-  --chart-4: 15 90% 62%;
-  --chart-5: 48 95% 58%;
+  --chart-1: 265 86% 58%;
+  --chart-2: 200 95% 55%;
+  --chart-3: 185 90% 45%;
+  --chart-4: 15 90% 60%;
+  --chart-5: 48 95% 55%;
 
   --radius: 0.75rem;
 
@@ -50,16 +50,30 @@
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: 232 16% 24%;
+  --sidebar-accent: 232 12% 22%;
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
 }
 
-/* ====== BASE con Tailwind ====== */
+/* Si usas tema .dark, puedes definir overrides aquí (no dejar bloque vacío) */
+.dark {
+  /* ejemplo: un poco más oscuro */
+  --background: 230 28% 11%;
+  --card: 232 24% 16%;
+}
+
+/* ====== BASE ====== */
 @layer base {
+  /* NADA de utilidades inválidas aquí */
   * { @apply border-border; }
-  *:focus-visible { @apply outline-none ring-2 ring-ring/50 ring-offset-2 ring-offset-background; }
+
+  *:focus-visible { 
+    /* ❌ outline-ring/50 NO existe */
+    /* ✅ usa ring utilities correctas */
+    @apply outline-none ring-2 ring-ring/50 ring-offset-2 ring-offset-background;
+  }
+
   body { @apply bg-background text-foreground; }
 }
 
@@ -67,59 +81,31 @@
 html, body { width: 100%; overflow-x: hidden; }
 img, svg, video, canvas, iframe { max-width: 100%; height: auto; }
 
-/* ====== UTILIDADES DE ESTILO ====== */
+/* ====== UTILIDADES EXTRA ====== */
 @layer utilities {
-  /* Fondo futurista en capas (radiales + textura + conic) */
   .future-bg {
     background-color: hsl(var(--background));
     background-image:
-      /* halo púrpura */
-      radial-gradient(70rem 46rem at 85% -10%, hsl(265 86% 45% / .25), transparent 55%),
-      /* halo cyan */
-      radial-gradient(50rem 36rem at 15% -10%, hsl(200 95% 45% / .22), transparent 58%),
-      /* halo teal inferior */
-      radial-gradient(90rem 70rem at 50% 115%, hsl(185 90% 35% / .18), transparent 60%),
-      /* leve textura diagonal “industrial” */
-      repeating-linear-gradient(135deg,
-        hsl(232 18% 18% / .30) 0 10px,
-        hsl(232 18% 16% / .30) 10px 20px
-      ),
-      /* base conic sutil */
-      conic-gradient(from 180deg at 50% 50%,
-        hsl(230 24% 16%),
-        hsl(232 22% 14%),
-        hsl(230 24% 16%)
-      );
+      radial-gradient(70rem 40rem at 80% -10%, hsl(265 86% 40% / .20), transparent 60%),
+      radial-gradient(55rem 35rem at 15% -10%, hsl(200 95% 40% / .22), transparent 60%),
+      radial-gradient(90rem 70rem at 50% 120%, hsl(185 90% 30% / .14), transparent 60%),
+      conic-gradient(from 180deg at 50% 50%, hsl(232 20% 16%), hsl(232 22% 14%), hsl(230 24% 16%));
     background-attachment: fixed;
   }
 
-  /* Tarjetas glassmorphism (añádela a tus <Card className="glass ...">) */
-  .glass {
-    @apply bg-white/10 border-white/15 backdrop-blur-md;
-  }
+  .glass { @apply bg-white/5 border-white/10 backdrop-blur-md; }
 
-  /* Contenedor con padding lateral */
-  .page-container {
-    @apply w-full max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8;
-  }
+  .page-container { @apply w-full max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8; }
 
-  /* Botón estilo “neón” reutilizable */
   .btn-neon {
     @apply relative inline-flex items-center justify-center rounded-xl px-4 py-2 font-semibold text-sm text-white;
-    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(200 95% 58%) 100%);
-    transition: filter .2s ease;
   }
   .btn-neon::before {
     content: "";
-    position: absolute;
-    inset: -2px;
+    position: absolute; inset: -2px; z-index: -1; border-radius: inherit;
     background: radial-gradient(120% 120% at 50% 50%, hsl(var(--primary)) 0%, transparent 55%);
-    filter: blur(14px);
-    opacity: .6;
-    z-index: -1;
-    border-radius: inherit;
+    filter: blur(14px); opacity: .6;
   }
-  .btn-neon:hover {
-    filter: brightness(1.06);
-  }
+  .btn-neon { background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(200 95% 55%) 100%); }
+  .btn-neon:hover { filter: brightness(1.05); }
 }
