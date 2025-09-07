@@ -1,51 +1,35 @@
-/* app/globals.css  — CORREGIDO Y COMPATIBLE CON VERCEL */
+/* app/globals.css — versión segura para Vercel */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ====== PALETA FUTURISTA (Neon Barber) ====== */
 :root {
-  /* Base más clara (navy suave) */
   --background: 230 25% 14%;
   --foreground: 210 40% 98%;
-
-  /* Superficies */
   --card: 232 22% 18%;
   --card-foreground: var(--foreground);
   --popover: 232 22% 18%;
   --popover-foreground: var(--foreground);
-
-  /* Marca (neón púrpura/índigo) */
   --primary: 265 86% 58%;
   --primary-foreground: 0 0% 100%;
-
-  /* Acentos fríos */
   --secondary: 200 95% 55%;
   --secondary-foreground: 210 40% 98%;
   --accent: 185 90% 45%;
   --accent-foreground: 210 40% 98%;
-
-  /* Estados */
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
-
-  /* Bordes/inputs/anillos */
   --muted: 232 12% 22%;
   --muted-foreground: 215 16% 76%;
   --border: 232 14% 26%;
   --input: 232 14% 26%;
   --ring: 265 86% 58%;
-
-  /* Charts */
   --chart-1: 265 86% 58%;
   --chart-2: 200 95% 55%;
   --chart-3: 185 90% 45%;
   --chart-4: 15 90% 60%;
   --chart-5: 48 95% 55%;
-
   --radius: 0.75rem;
-
-  /* Sidebar */
   --sidebar: 232 22% 18%;
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
@@ -56,23 +40,17 @@
   --sidebar-ring: var(--ring);
 }
 
-/* Si usas tema .dark, puedes definir overrides aquí (no dejar bloque vacío) */
 .dark {
-  /* ejemplo: un poco más oscuro */
   --background: 230 28% 11%;
   --card: 232 24% 16%;
 }
 
 /* ====== BASE ====== */
 @layer base {
-  /* NADA de utilidades inválidas aquí */
   * { @apply border-border; }
 
-  *:focus-visible { 
-    /* ❌ outline-ring/50 NO existe */
-    /* ✅ usa ring utilities correctas */
-    @apply outline-none ring-2 ring-ring/50 ring-offset-2 ring-offset-background;
-  }
+  /* 🔧 OJO: NADA de 'outline-ring/50' (esa clase no existe). */
+  *:focus-visible { @apply outline-none ring-2 ring-ring/50 ring-offset-2 ring-offset-background; }
 
   body { @apply bg-background text-foreground; }
 }
@@ -94,15 +72,13 @@ img, svg, video, canvas, iframe { max-width: 100%; height: auto; }
   }
 
   .glass { @apply bg-white/5 border-white/10 backdrop-blur-md; }
-
   .page-container { @apply w-full max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8; }
 
   .btn-neon {
     @apply relative inline-flex items-center justify-center rounded-xl px-4 py-2 font-semibold text-sm text-white;
   }
   .btn-neon::before {
-    content: "";
-    position: absolute; inset: -2px; z-index: -1; border-radius: inherit;
+    content: ""; position: absolute; inset: -2px; z-index: -1; border-radius: inherit;
     background: radial-gradient(120% 120% at 50% 50%, hsl(var(--primary)) 0%, transparent 55%);
     filter: blur(14px); opacity: .6;
   }
