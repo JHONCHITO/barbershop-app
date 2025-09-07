@@ -1,7 +1,19 @@
 // components/reservas.tsx
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+/**
+ * 5.1) Quitamos por completo almacenamiento local y BroadcastChannel.
+ * - Se eliminaron: STORAGE_KEY, loadReservas, saveReservas, bcRef, syncAndBroadcast,
+ *   listeners de "storage" y "BroadcastChannel", y el seeding demo.
+ *
+ * 5.2) Helpers de API centralizados: api.list / api.create / api.patch / api.remove
+ * 5.3) Estado + carga inicial desde API (useEffect con fetch)
+ * 5.4) createReserva ahora hace POST a /api/reservas
+ * 5.5) handleEnviarABarbero también hace POST (mismo endpoint) con estado "pendiente-barbero"
+ * 5.6) Acciones admin (aceptar/rechazar/posponer/eliminar) hacen PATCH/DELETE y recargan
+ */
+
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,13 +27,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Plus, Search, Filter, Edit, Trash2, Phone, Mail, Clock, CheckCircle,
   XCircle, Calendar, User, MapPin, Star, MessageSquare, Scissors, Heart,
-  Settings, Bell, X, Eye, EyeOff, CalendarClock
+  Settings, X, Eye, EyeOff, CalendarClock
 } from "lucide-react";
 
 import { useBarberos } from "@/contexts/barberos-context";
 import type { BarberiaID, Barbero } from "@/contexts/barberos-context";
 
-/* ==================== Tipos ==================== */
+/* ==================== Tipos (UI) ==================== */
+// Nota: en la DB normalmente el id es string (ObjectId). En UI usamos id: string.
 type BarberiaIDView = BarberiaID | "todas";
 type EstadoReserva = "pendiente-barbero" | "pendiente-cliente" | "confirmada" | "cancelada" | "completada";
 type Prioridad = "alta" | "normal";
@@ -40,8 +53,8 @@ interface Barberia {
   telefono: string;
 }
 interface ServicioPersonalizado { opciones: string[]; extras: string[]; }
-interface Reserva {
-  id: number;
+interface ReservaDB {
+  id: string; // <- viene de la API
   cliente: string;
   telefono: string;
   email: string;
@@ -49,8 +62,8 @@ interface Reserva {
   servicioPersonalizado: ServicioPersonalizado;
   barbero: string;
   barberia: BarberiaID;
-  fecha: string;
-  hora: string;
+  fecha: string; // YYYY-MM-DD
+  hora: string;  // HH:mm
   duracion: number;
   estado: EstadoReserva;
   notas: string;
@@ -67,26 +80,46 @@ interface NuevaReserva {
 interface Servicio {
   id: string; nombre: string; duracion: number; opciones: string[]; extras: string[]; icono: string;
 }
-interface NotificacionBarbero {
-  id: number; barbero: string; cliente: string; servicio: string; fecha: string; hora: string;
-  barberia: BarberiaID; timestamp: string; leida: boolean;
-}
 interface EditForm { fecha: string; hora: string; barbero: string; notas: string; }
 
-/* ==================== Persistencia ==================== */
-const STORAGE_KEY = "reservas";
-const loadReservas = (): Reserva[] => {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Reserva[]) : [];
-  } catch { return []; }
-};
-const saveReservas = (list: Reserva[]) => {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch {}
+/* ==================== 5.2) Helpers de API ==================== */
+const api = {
+  async list() {
+    const r = await fetch("/api/reservas", { cache: "no-store" });
+    if (!r.ok) throw new Error("No se pudo cargar reservas");
+    return (await r.json()) as ReservaDB[];
+  },
+  async create(payload: Omit<ReservaDB, "id" | "notificaciones" | "modificable" | "prioridad" | "estado" | "duracion"> & {
+    estado?: EstadoReserva;
+    duracion?: number;
+    notificaciones?: string[];
+    modificable?: boolean;
+    prioridad?: Prioridad;
+  }) {
+    const r = await fetch("/api/reservas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) throw new Error("No se pudo crear la reserva");
+    return (await r.json()) as ReservaDB;
+  },
+  async patch(id: string, changes: Partial<ReservaDB>) {
+    const r = await fetch(`/api/reservas/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(changes),
+    });
+    if (!r.ok) throw new Error("No se pudo actualizar la reserva");
+    return (await r.json()) as ReservaDB;
+  },
+  async remove(id: string) {
+    const r = await fetch(`/api/reservas/${id}`, { method: "DELETE" });
+    if (!r.ok) throw new Error("No se pudo eliminar la reserva");
+    return true;
+  },
 };
 
-/* ==================== Componente ==================== */
 export default function Reservas({
   preselectBarbero,
   preselectBarberia,
@@ -107,23 +140,23 @@ export default function Reservas({
   } | null>(null);
 
   /* ------- Modales y estados ------- */
-  const [editingReserva, setEditingReserva] = useState<Reserva | null>(null);
-  const [chatOpen, setChatOpen] = useState<Reserva | null>(null);
+  const [editingReserva, setEditingReserva] = useState<ReservaDB | null>(null);
   const [barberiasDialogOpen, setBarberiasDialogOpen] = useState(false);
   const [editingBarberia, setEditingBarberia] = useState<Barberia | null>(null);
-  const [notificacionesBarbero, setNotificacionesBarbero] = useState<NotificacionBarbero[]>([]);
-  const [showNotificacion, setShowNotificacion] = useState(false);
 
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [wizardMsg, setWizardMsg] = useState<{ type: "error" | "ok"; text: string } | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({ fecha: "", hora: "", barbero: "", notas: "" });
+
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [newReserva, setNewReserva] = useState<NuevaReserva>({
     cliente: "", telefono: "", email: "", barberia: "", servicio: "",
     servicioPersonalizado: { opciones: [], extras: [] }, barbero: "", fecha: "", hora: "", notas: "",
   });
 
-  /* ------- Barberías demo ------- */
+  /* ------- Barberías demo (estático en UI) ------- */
   const [barberias, setBarberias] = useState<Barberia[]>([
     { id: "principal", nombre: "Barbería Central", direccion: "Calle Nápoles", telefono: "+57 3187092130" },
     { id: "norte", nombre: "Barbería Norte", direccion: "Av. Norte 123", telefono: "+57 3000000001" },
@@ -138,112 +171,28 @@ export default function Reservas({
     { id: "combo",        nombre: "Corte + Barba",      duracion: 45, opciones: ["Paquete completo","Estilo clásico","Look moderno"], extras: ["Tratamiento capilar","Masaje","Productos premium"], icono: "✨" },
   ];
 
-  /* ==================== Broadcast & Storage Sync ==================== */
-  const bcRef = useRef<BroadcastChannel | null>(null);
-  const [reservas, setReservas] = useState<Reserva[]>([]);
+  /* ==================== 5.3) Estado + carga inicial desde API ==================== */
+  const [reservas, setReservas] = useState<ReservaDB[]>([]);
+
+  const reload = async () => {
+    setLoading(true);
+    try {
+      const data = await api.list();
+      setReservas(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Carga inicial
-    const boot = loadReservas();
-    if (boot.length) setReservas(boot);
-    else {
-      const demo: Reserva[] = [
-        {
-          id: 1,
-          cliente: "Juan Pérez",
-          telefono: "+57 300 123 4567",
-          email: "juan@email.com",
-          servicio: "Corte + Barba",
-          servicioPersonalizado: { opciones: ["Paquete completo"], extras: ["Masaje"] },
-          barbero: "Carlos Ruiz",
-          barberia: "principal",
-          fecha: "2024-01-15",
-          hora: "10:00",
-          duracion: 45,
-          estado: "pendiente-barbero",
-          notas: "Cliente regular, prefiere corte clásico",
-          notificaciones: ["Reserva creada", "Esperando confirmación del barbero"],
-          modificable: true,
-          prioridad: "normal",
-        },
-      ];
-      setReservas(demo);
-      saveReservas(demo);
-    }
+    reload();
+  }, []);
 
-    // Canal de difusión (mismo origen)
-    try { bcRef.current = new BroadcastChannel("reservas"); } catch { bcRef.current = null; }
-    const bc = bcRef.current;
-
-    const onMessage = (ev: MessageEvent) => {
-      const data = ev.data as { type: string; payload?: any };
-      if (!data || data.type !== "nueva-reserva") return;
-      const r: Reserva = data.payload;
-
-      setReservas(prev => {
-        if (prev.some(x => x.id === r.id)) return prev;
-        const next = [...prev, r];
-        saveReservas(next);
-        return next;
-      });
-
-      if (isAdmin) {
-        setNotificacionesBarbero(p => [
-          ...p,
-          { id: Date.now(), barbero: r.barbero, cliente: r.cliente, servicio: r.servicio,
-            fecha: r.fecha, hora: r.hora, barberia: r.barberia, timestamp: new Date().toLocaleString(), leida: false }
-        ]);
-        setShowNotificacion(true);
-        setTimeout(() => setShowNotificacion(false), 5000);
-      }
-    };
-    bc?.addEventListener("message", onMessage);
-
-    // Sincronización por localStorage (si admin entra luego)
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== STORAGE_KEY || !e.newValue) return;
-      try {
-        const ext: Reserva[] = JSON.parse(e.newValue);
-        setReservas(ext);
-
-        if (isAdmin && ext.length) {
-          const r = ext[ext.length - 1];
-          setNotificacionesBarbero(p => [
-            ...p,
-            { id: Date.now(), barbero: r.barbero, cliente: r.cliente, servicio: r.servicio,
-              fecha: r.fecha, hora: r.hora, barberia: r.barberia, timestamp: new Date().toLocaleString(), leida: false }
-          ]);
-          setShowNotificacion(true);
-          setTimeout(() => setShowNotificacion(false), 5000);
-        }
-      } catch {}
-    };
-    window.addEventListener("storage", onStorage);
-
-    // Permiso de notificaciones (solo admin)
-    if (isAdmin && "Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission().catch(() => {});
-    }
-
-    return () => {
-      bc?.removeEventListener("message", onMessage);
-      bc?.close();
-      window.removeEventListener("storage", onStorage);
-    };
-  }, [isAdmin]);
-
-  /* ==================== Helpers ==================== */
+  /* ==================== Helpers UI ==================== */
   const findBarberByName = (barberia: BarberiaIDView, nombre: string): Barbero | undefined =>
     barberia === "todas" ? undefined : getBarberosDe(barberia as BarberiaID).find(b => b.nombre === nombre);
-
-  const openWhatsApp = (r: Reserva) => {
-    const b = findBarberByName(r.barberia, r.barbero);
-    const wa = b?.whatsapp ?? "";
-    if (!wa) { alert("Este barbero no tiene WhatsApp configurado."); return; }
-    const msg = `Hola ${r.barbero}! Soy ${r.cliente}. Tengo una cita para el ${r.fecha} a las ${r.hora} para ${r.servicio}. ¿Podrías confirmarme?`;
-    const url = `https://wa.me/${wa.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(msg)}`;
-    window.open(url, "_blank");
-  };
 
   const checkAvailability = (barberoId: string, fecha: string, hora: string) => {
     const isAvailable = Math.random() > 0.3;
@@ -279,129 +228,128 @@ export default function Reservas({
       </Badge>
     ) : null;
 
-  /* ==================== Acciones / Sync ==================== */
-  const syncAndBroadcast = (next: Reserva[], nueva?: Reserva) => {
-    setReservas(next);
-    saveReservas(next);
-    if (nueva && bcRef.current) {
-      bcRef.current.postMessage({ type: "nueva-reserva", payload: nueva });
-    }
-  };
-
+  /* ==================== 5.4) Crear reserva (POST) ==================== */
   const canCreate =
     !!(newReserva.cliente && newReserva.servicio && newReserva.barbero &&
        newReserva.fecha && newReserva.hora && newReserva.barberia && newReserva.barberia !== "todas");
 
-  const canNotify =
-    !!(newReserva.cliente && newReserva.barbero && newReserva.servicio &&
-       newReserva.fecha && newReserva.hora && newReserva.barberia && newReserva.barberia !== "todas");
-
-  const enviarNotificacionBarbero = (r: Reserva) => {
-    const n: NotificacionBarbero = {
-      id: Date.now(),
-      barbero: r.barbero, cliente: r.cliente, servicio: r.servicio,
-      fecha: r.fecha, hora: r.hora, barberia: r.barberia,
-      timestamp: new Date().toLocaleString(), leida: false,
-    };
-    setNotificacionesBarbero(prev => [...prev, n]);
-    setShowNotificacion(true);
-    setTimeout(() => setShowNotificacion(false), 5000);
-
-    if ("Notification" in window && Notification.permission === "granted") {
-      new Notification(`Nueva cita solicitada`, {
-        body: `${r.cliente} solicita ${r.servicio} el ${r.fecha} a las ${r.hora}`,
-        icon: "/barbershop-icon.png",
-      });
-    }
-  };
-
-  const handleEnviarABarbero = () => {
-    if (!canNotify) {
-      setWizardMsg({ type: "error", text: "Completa cliente, servicio, barbero, fecha, hora y barbería para enviar al barbero." });
-      return;
-    }
-    const servicio = serviciosPersonalizables.find(s => s.nombre === newReserva.servicio);
-    const tmp: Reserva = {
-      id: Date.now(),
-      cliente: newReserva.cliente,
-      telefono: newReserva.telefono || "",
-      email: newReserva.email || "",
-      servicio: newReserva.servicio,
-      servicioPersonalizado: { ...newReserva.servicioPersonalizado },
-      barbero: newReserva.barbero,
-      barberia: newReserva.barberia as BarberiaID,
-      fecha: newReserva.fecha,
-      hora: newReserva.hora,
-      duracion: servicio?.duracion || 30,
-      estado: "pendiente-barbero",
-      notas: newReserva.notas || "",
-      notificaciones: ["Solicitud enviada al barbero"],
-      modificable: true,
-      prioridad: "normal",
-    };
-
-    const next = [...reservas, tmp];
-    syncAndBroadcast(next, tmp);        // guarda + notifica al admin
-    enviarNotificacionBarbero(tmp);     // toast/notification (si admin)
-    setWizardMsg({ type: "ok", text: "Enviado al barbero para confirmación ✅" });
-  };
-
-  const createReserva = () => {
+  const createReserva = async () => {
     setWizardMsg(null);
     if (!canCreate) {
       setWizardMsg({ type: "error", text: "Faltan datos obligatorios para crear la reserva." });
       return;
     }
-    const servicio = serviciosPersonalizables.find(s => s.nombre === newReserva.servicio);
-    const nueva: Reserva = {
-      id: Date.now(),
-      cliente: newReserva.cliente, telefono: newReserva.telefono, email: newReserva.email,
-      servicio: newReserva.servicio,
-      servicioPersonalizado: { ...newReserva.servicioPersonalizado },
-      barbero: newReserva.barbero, barberia: newReserva.barberia as BarberiaID,
-      fecha: newReserva.fecha, hora: newReserva.hora,
-      duracion: servicio?.duracion || 30,
-      estado: "pendiente-barbero",
-      notas: newReserva.notas,
-      notificaciones: ["Reserva creada", "Esperando confirmación del barbero"],
-      modificable: true, prioridad: "normal",
-    };
+    try {
+      setSaving(true);
+      const base = serviciosPersonalizables.find(s => s.nombre === newReserva.servicio);
+      await api.create({
+        cliente: newReserva.cliente,
+        telefono: newReserva.telefono || "",
+        email: newReserva.email || "",
+        servicio: newReserva.servicio,
+        servicioPersonalizado: { ...newReserva.servicioPersonalizado },
+        barbero: newReserva.barbero,
+        barberia: newReserva.barberia as BarberiaID,
+        fecha: newReserva.fecha,
+        hora: newReserva.hora,
+        duracion: base?.duracion ?? 30,
+        estado: "pendiente-barbero",
+        notas: newReserva.notas || "",
+        notificaciones: ["Reserva creada", "Esperando confirmación del barbero"],
+        modificable: true,
+        prioridad: "normal",
+      });
 
-    const next = [...reservas, nueva];
-    syncAndBroadcast(next, nueva);
-
-    // Reseteo del wizard (el cliente NO verá lista)
-    setNewReserva({
-      cliente: "", telefono: "", email: "", barberia: "", servicio: "",
-      servicioPersonalizado: { opciones: [], extras: [] }, barbero: "", fecha: "", hora: "", notas: "",
-    });
-    setAvailabilityCheck(null);
-    setWizardMsg({ type: "ok", text: "Reserva creada correctamente ✅" });
-    setNewDialogOpen(false);
+      // limpiar y recargar
+      setNewReserva({
+        cliente: "", telefono: "", email: "", barberia: "", servicio: "",
+        servicioPersonalizado: { opciones: [], extras: [] }, barbero: "", fecha: "", hora: "", notas: "",
+      });
+      setAvailabilityCheck(null);
+      await reload();
+      setWizardMsg({ type: "ok", text: "Reserva creada correctamente ✅" });
+      setNewDialogOpen(false);
+    } catch (e: any) {
+      console.error(e);
+      setWizardMsg({ type: "error", text: e?.message || "No se pudo crear la reserva" });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const patchReserva = (id: number, updater: (r: Reserva) => Reserva) => {
-    const next = reservas.map(r => (r.id === id ? updater(r) : r));
-    syncAndBroadcast(next);
-  };
-  const aceptarReserva  = (id: number) => patchReserva(id, r => ({ ...r, estado: "confirmada", notificaciones: [...r.notificaciones, "Reserva confirmada por el barbero"] }));
-  const rechazarReserva = (id: number) => patchReserva(id, r => ({ ...r, estado: "cancelada", notificaciones: [...r.notificaciones, "Reserva rechazada por el barbero"] }));
-  const eliminarReserva = (id: number) => syncAndBroadcast(reservas.filter(r => r.id !== id));
-  const abrirChat = (r: Reserva) => setChatOpen(r);
+  /* ==================== 5.5) Enviar a barbero (POST) ==================== */
+  const canNotify =
+    !!(newReserva.cliente && newReserva.barbero && newReserva.servicio &&
+       newReserva.fecha && newReserva.hora && newReserva.barberia && newReserva.barberia !== "todas");
 
-  const actualizarBarberia = (b: Barberia) => {
-    setBarberias(prev => prev.map(x => x.id === b.id ? b : x));
-    setEditingBarberia(null);
+  const handleEnviarABarbero = async () => {
+    if (!canNotify) {
+      setWizardMsg({ type: "error", text: "Completa cliente, servicio, barbero, fecha, hora y barbería para enviar al barbero." });
+      return;
+    }
+    try {
+      setSaving(true);
+      const base = serviciosPersonalizables.find(s => s.nombre === newReserva.servicio);
+      await api.create({
+        cliente: newReserva.cliente,
+        telefono: newReserva.telefono || "",
+        email: newReserva.email || "",
+        servicio: newReserva.servicio,
+        servicioPersonalizado: { ...newReserva.servicioPersonalizado },
+        barbero: newReserva.barbero,
+        barberia: newReserva.barberia as BarberiaID,
+        fecha: newReserva.fecha,
+        hora: newReserva.hora,
+        duracion: base?.duracion ?? 30,
+        estado: "pendiente-barbero",
+        notas: newReserva.notas || "",
+        notificaciones: ["Solicitud enviada al barbero"],
+        modificable: true,
+        prioridad: "normal",
+      });
+
+      await reload();
+      setWizardMsg({ type: "ok", text: "Enviado al barbero para confirmación ✅" });
+    } catch (e: any) {
+      console.error(e);
+      setWizardMsg({ type: "error", text: e?.message || "No se pudo enviar al barbero" });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const guardarCambiosReserva = () => {
+  /* ==================== 5.6) Acciones admin (PATCH/DELETE) ==================== */
+  const aceptarReserva  = async (id: string) => {
+    const r = reservas.find(x => x.id === id);
+    const notis = [...(r?.notificaciones ?? []), "Reserva confirmada por el barbero"];
+    await api.patch(id, { estado: "confirmada", notificaciones: notis });
+    await reload();
+  };
+
+  const rechazarReserva = async (id: string) => {
+    const r = reservas.find(x => x.id === id);
+    const notis = [...(r?.notificaciones ?? []), "Reserva rechazada por el barbero"];
+    await api.patch(id, { estado: "cancelada", notificaciones: notis });
+    await reload();
+  };
+
+  const eliminarReserva = async (id: string) => {
+    await api.remove(id);
+    await reload();
+  };
+
+  const guardarCambiosReserva = async () => {
     if (!editingReserva) return;
-    patchReserva(editingReserva.id, r => ({
-      ...r,
-      fecha: editForm.fecha, hora: editForm.hora, barbero: editForm.barbero, notas: editForm.notas,
-      notificaciones: [...r.notificaciones, `Reserva modificada ${new Date().toLocaleString()}`]
-    }));
+    const notis = [...editingReserva.notificaciones, `Reserva modificada ${new Date().toLocaleString()}`];
+    await api.patch(editingReserva.id, {
+      fecha: editForm.fecha,
+      hora: editForm.hora,
+      barbero: editForm.barbero,
+      notas: editForm.notas,
+      notificaciones: notis,
+    });
     setEditingReserva(null);
+    await reload();
   };
 
   /* ------- Preselección (cuando navegas con query) ------- */
@@ -430,48 +378,29 @@ export default function Reservas({
   });
 
   /* ------- Posponer (admin) ------- */
-  const [posponerDe, setPosponerDe] = useState<Reserva | null>(null);
+  const [posponerDe, setPosponerDe] = useState<ReservaDB | null>(null);
   const [posFecha, setPosFecha] = useState("");
   const [posHora, setPosHora] = useState("");
-  const confirmarPosponer = () => {
+  const confirmarPosponer = async () => {
     if (!posponerDe || !posFecha || !posHora) return;
-    patchReserva(posponerDe.id, r => ({
-      ...r,
-      fecha: posFecha, hora: posHora, estado: "pendiente-cliente",
-      notificaciones: [...r.notificaciones, `Barbería propuso reprogramar a ${posFecha} ${posHora}`]
-    }));
+    const notis = [...posponerDe.notificaciones, `Barbería propuso reprogramar a ${posFecha} ${posHora}`];
+    await api.patch(posponerDe.id, { fecha: posFecha, hora: posHora, estado: "pendiente-cliente", notificaciones: notis });
     setPosponerDe(null); setPosFecha(""); setPosHora("");
+    await reload();
   };
 
   /* ==================== Render ==================== */
   return (
     <div className="p-6 space-y-6">
-      {/* Toast SOLO admin */}
-      {isAdmin && showNotificacion && notificacionesBarbero.length > 0 && (
-        <div className="fixed top-4 right-4 z-50 bg-gradient-to-r from-green-500 to-emerald-600 text-white p-4 rounded-lg shadow-lg border-l-4 border-white">
-          <div className="flex items-center gap-3">
-            <Bell className="h-5 w-5" />
-            <div>
-              <p className="font-semibold">¡Nueva Cita Solicitada!</p>
-              <p className="text-sm opacity-90">
-                {notificacionesBarbero[notificacionesBarbero.length - 1]?.cliente} solicita cita con{" "}
-                {notificacionesBarbero[notificacionesBarbero.length - 1]?.barbero}
-              </p>
-            </div>
-            <button onClick={() => setShowNotificacion(false)} className="ml-auto text-white hover:text-gray-200">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Header + botón Nueva Reserva (visible a todos) */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
             Sistema de Reservas
           </h1>
-          <p className="text-muted-foreground">Gestión completa con verificación en tiempo real</p>
+          <p className="text-muted-foreground">
+            {loading ? "Cargando reservas..." : "Gestión completa con verificación en tiempo real"}
+          </p>
         </div>
 
         <div className="flex gap-2">
@@ -491,9 +420,9 @@ export default function Reservas({
           {/* Wizard Nueva Reserva (cliente/admin) */}
           <Dialog open={newDialogOpen} onOpenChange={setNewDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={() => setWizardMsg(null)} className="bg-gradient-to-r from-primary to-purple-600">
+              <Button onClick={() => setWizardMsg(null)} className="bg-gradient-to-r from-primary to-purple-600" disabled={saving}>
                 <Plus className="w-4 h-4 mr-2" />
-                Nueva Reserva
+                {saving ? "Guardando..." : "Nueva Reserva"}
               </Button>
             </DialogTrigger>
 
@@ -709,11 +638,11 @@ export default function Reservas({
                   </Card>
 
                   <div className="flex gap-2">
-                    <Button className="flex-1" onClick={createReserva} disabled={!canCreate}>
-                      <Calendar className="w-4 h-4 mr-2" /> Crear Reserva
+                    <Button className="flex-1" onClick={createReserva} disabled={!canCreate || saving}>
+                      <Calendar className="w-4 h-4 mr-2" /> {saving ? "Guardando..." : "Crear Reserva"}
                     </Button>
-                    <Button variant="outline" className="flex-1" onClick={handleEnviarABarbero} disabled={!canNotify}>
-                      <MessageSquare className="w-4 h-4 mr-2" /> Enviar a Barbero
+                    <Button variant="outline" className="flex-1" onClick={handleEnviarABarbero} disabled={!canNotify || saving}>
+                      <MessageSquare className="w-4 h-4 mr-2" /> {saving ? "Enviando..." : "Enviar a Barbero"}
                     </Button>
                   </div>
                 </TabsContent>
@@ -780,7 +709,11 @@ export default function Reservas({
                         <h3 className="text-lg font-semibold">{r.cliente}</h3>
                       </div>
                       {getEstadoBadge(r.estado)}
-                      {getPriorityBadge(r.prioridad)}
+                      {r.prioridad === "alta" && (
+                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                          <Heart className="w-3 h-3 mr-1" />VIP
+                        </Badge>
+                      )}
                       <Badge variant="outline">
                         {barberias.find((b) => b.id === r.barberia)?.nombre}
                       </Badge>
@@ -822,9 +755,6 @@ export default function Reservas({
                     <div className="flex items-center gap-4 mb-2 text-sm">
                       <div className="flex items-center gap-1"><Phone className="w-3 h-3" />{r.telefono}</div>
                       <div className="flex items-center gap-1"><Mail className="w-3 h-3" />{r.email}</div>
-                      <Button variant="outline" size="sm" onClick={() => openWhatsApp(r)}>
-                        <MessageSquare className="w-3 h-3 mr-1" /> WhatsApp Barbero
-                      </Button>
                     </div>
 
                     {r.notas && (
@@ -858,15 +788,16 @@ export default function Reservas({
                     )}
 
                     {r.modificable && (
-                      <Button variant="outline" size="sm"
-                        onClick={() => { setEditingReserva(r); setEditForm({ fecha: r.fecha ?? "", hora: r.hora ?? "", barbero: r.barbero ?? "", notas: r.notas ?? "" }); }}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingReserva(r);
+                          setEditForm({ fecha: r.fecha ?? "", hora: r.hora ?? "", barbero: r.barbero ?? "", notas: r.notas ?? "" });
+                        }}>
                         <Edit className="w-4 h-4 mr-1" />Modificar
                       </Button>
                     )}
-
-                    <Button variant="outline" size="sm" onClick={() => abrirChat(r)}>
-                      <MessageSquare className="w-4 h-4 mr-1" />Chat
-                    </Button>
 
                     <Button variant="outline" size="sm" onClick={() => eliminarReserva(r.id)}>
                       <Trash2 className="w-4 h-4" />
@@ -918,9 +849,9 @@ export default function Reservas({
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="col-span-2 flex items-center gap-2"><MapPin className="w-3 h-3" /> {b.direccion || "—"}</div>
                       <div className="flex items-center gap-2"><Mail className="w-3 h-3" /> {b.email || "—"}</div>
                       <div className="flex items-center gap-2"><Phone className="w-3 h-3" /> {b.telefono || "—"}</div>
-                      <div className="col-span-2 flex items-center gap-2"><MapPin className="w-3 h-3" /> {b.direccion || "—"}</div>
                       <div className="col-span-2 flex items-center gap-2"><Clock className="w-3 h-3" /> {b.horario || "—"}</div>
                     </div>
 
@@ -983,31 +914,12 @@ export default function Reservas({
                 <Input value={editingBarberia.telefono} onChange={(e) => setEditingBarberia({ ...editingBarberia, telefono: e.target.value })} />
               </div>
               <div className="flex gap-2">
-                <Button onClick={() => actualizarBarberia(editingBarberia)} className="flex-1">Guardar Cambios</Button>
+                <Button onClick={() => {
+                  setBarberias(prev => prev.map(x => x.id === editingBarberia.id ? editingBarberia : x));
+                  setEditingBarberia(null);
+                }} className="flex-1">Guardar Cambios</Button>
                 <Button variant="outline" onClick={() => setEditingBarberia(null)}>Cancelar</Button>
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Chat – SOLO admin */}
-      {isAdmin && chatOpen && (
-        <Dialog open={!!chatOpen} onOpenChange={(open) => !open && setChatOpen(null)}>
-          <DialogContent className="max-w-md max-h-[80vh] bg-white text-foreground">
-            <DialogHeader><DialogTitle className="flex items-center gap-2"><MessageSquare className="w-5 h-5" />Chat - {chatOpen.cliente}</DialogTitle></DialogHeader>
-            <div className="space-y-4">
-              <div className="bg-gray-50 p-3 rounded-lg max-h-60 overflow-y-auto">
-                <div className="space-y-2">
-                  <div className="bg-blue-100 p-2 rounded text-sm"><strong>Cliente:</strong> Hola, ¿está confirmada mi cita?</div>
-                  <div className="bg-green-100 p-2 rounded text-sm ml-4"><strong>Barbero:</strong> ¡Hola! Sí, tu cita está confirmada para el {chatOpen.fecha} a las {chatOpen.hora}</div>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Input placeholder="Escribe tu mensaje..." className="flex-1" />
-                <Button>Enviar</Button>
-              </div>
-              <div className="text-xs text-muted-foreground">Chat en tiempo real con {chatOpen.barbero}</div>
             </div>
           </DialogContent>
         </Dialog>
