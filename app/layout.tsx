@@ -2,7 +2,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Providers from "./providers";
-import BackFloating from "@/components/back-floating"; // 👈 botón flotante (Atrás/Inicio)
+import BackFloating from "@/components/back-floating"; // botón flotante (Atrás/Inicio)
 
 export const metadata: Metadata = {
   title: "BarberPro | Gestión Profesional",
@@ -19,13 +19,8 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      {/* Fondo futurista + tipografía y fixes */}
       <body className="future-bg text-foreground antialiased overflow-x-hidden min-h-dvh">
-        <Providers>
-          {children}
-        </Providers>
-
-        {/* Botón flotante global (cámbialo a dashboard si lo prefieres) */}
+        <Providers>{children}</Providers>
         <BackFloating inicioSection="reservas" />
       </body>
     </html>
