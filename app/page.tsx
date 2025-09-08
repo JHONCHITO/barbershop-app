@@ -41,22 +41,36 @@ function HomeCore() {
 
   const renderContent = () => {
     switch (activeSection) {
-      case "dashboard":     return role === "admin" ? <Dashboard /> : <Reservas preselectBarbero={preselectBarbero} preselectBarberia={preselectBarberia} />;
-      case "reservas":      return <Reservas preselectBarbero={preselectBarbero} preselectBarberia={preselectBarberia} />;
-      case "calendario":    return <Calendario />;
-      case "barberos":      return <Barberos />;
-      case "servicios":     return <Servicios />;
-      case "clientes":      return <Clientes />;
-      case "reportes":      return role === "admin" ? <Reportes /> : <Reservas />;
-      case "configuracion": return role === "admin" ? <Configuracion /> : <Reservas />;
-      default:              return role === "admin" ? <Dashboard /> : <Reservas />;
+      case "dashboard":
+        return role === "admin"
+          ? <Dashboard />
+          : <Reservas preselectBarbero={preselectBarbero} preselectBarberia={preselectBarberia} isAdmin={false} />;
+      case "reservas":
+        return <Reservas
+          preselectBarbero={preselectBarbero}
+          preselectBarberia={preselectBarberia}
+          isAdmin={role === "admin"}
+        />;
+      case "calendario":
+        return <Calendario />;
+      case "barberos":
+        return <Barberos />;
+      case "servicios":
+        return <Servicios />;
+      case "clientes":
+        return <Clientes />;
+      case "reportes":
+        return role === "admin" ? <Reportes /> : <Reservas isAdmin={false} />;
+      case "configuracion":
+        return role === "admin" ? <Configuracion /> : <Reservas isAdmin={false} />;
+      default:
+        return role === "admin" ? <Dashboard /> : <Reservas isAdmin={false} />;
     }
   };
 
   return (
     <div className="flex min-h-[100dvh] bg-background">
       <Sidebar activeSection={activeSection} setActiveSection={setActiveSection} />
-      {/* min-w-0 evita que el main fuerce ancho y cause scroll horizontal */}
       <main className="min-w-0 flex-1 overflow-auto">
         <div className="page-container py-4 sm:py-6">
           {renderContent()}

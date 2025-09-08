@@ -1,38 +1,38 @@
 // lib/mongodb.ts
 import { MongoClient, Db } from "mongodb";
 
-let client: MongoClient | null = null;
-let db: Db | null = null;
-
-/** Lee y valida la URI, devolviendo siempre un string */
-function getMongoUri(): string {
-  const uri = process.env.MONGODB_URI;
-  if (!uri || uri.length === 0) {
-    // Mensaje claro para build/local
-    throw new Error("Falta la variable de entorno MONGODB_URI");
-  }
-  return uri;
+const uri = process.env.MONGODB_URI as string;
+if (!uri) {
+  throw new Error("Falta la variable de entorno MONGODB_URI");
 }
 
-/** Obtiene una instancia singleton de Db (reutilizable en server actions/rutas) */
-export async function getDb(): Promise<Db> {
-  if (db) return db;
+const dbName = process.env.MONGODB_DB || "barbershop";
 
-  const uri = getMongoUri(); // ← ahora es string garantizado
-  if (!client) {
-    client = new MongoClient(uri);
-  }
-
-  await client.connect();
-  db = client.db(); // usa el DB por defecto definido en la URI (o el 'admin' del cluster)
-  return db!;
+declare global {
+  // para cachear en hot-reload / serverless
+  // (usar any aquí evita conflictos de tipos en runtimes)
+  // eslint-disable-next-line no-var
+  var __mongoClientPromise: Promise<MongoClient> | undefined;
+  // eslint-disable-next-line no-var
+  var __mongoDb: Db | undefined;
 }
 
-/** Útil en tests o cierres controlados */
-export async function closeDb(): Promise<void> {
-  if (client) {
-    await client.close();
-    client = null;
-    db = null;
-  }
+let clientPromise: Promise<MongoClient>;
+
+if (!global.__mongoClientPromise) {
+  const client = new MongoClient(uri, {
+    maxPoolSize: 5,
+    retryWrites: true,
+  });
+  global.__mongoClientPromise = client.connect();
+}
+
+clientPromise = global.__mongoClientPromise;
+
+export async function getDB(): Promise<Db> {
+  if (global.__mongoDb) return global.__mongoDb;
+  const client = await clientPromise;       // connect() es idempotente en v6
+  const db = client.db(dbName);
+  global.__mongoDb = db;
+  return db;
 }

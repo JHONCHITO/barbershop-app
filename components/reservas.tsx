@@ -1,18 +1,6 @@
 // components/reservas.tsx
 "use client";
 
-/**
- * 5.1) Quitamos por completo almacenamiento local y BroadcastChannel.
- * - Se eliminaron: STORAGE_KEY, loadReservas, saveReservas, bcRef, syncAndBroadcast,
- *   listeners de "storage" y "BroadcastChannel", y el seeding demo.
- *
- * 5.2) Helpers de API centralizados: api.list / api.create / api.patch / api.remove
- * 5.3) Estado + carga inicial desde API (useEffect con fetch)
- * 5.4) createReserva ahora hace POST a /api/reservas
- * 5.5) handleEnviarABarbero también hace POST (mismo endpoint) con estado "pendiente-barbero"
- * 5.6) Acciones admin (aceptar/rechazar/posponer/eliminar) hacen PATCH/DELETE y recargan
- */
-
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,14 +15,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Plus, Search, Filter, Edit, Trash2, Phone, Mail, Clock, CheckCircle,
   XCircle, Calendar, User, MapPin, Star, MessageSquare, Scissors, Heart,
-  Settings, X, Eye, EyeOff, CalendarClock
+  Settings, Eye, EyeOff, CalendarClock
 } from "lucide-react";
 
 import { useBarberos } from "@/contexts/barberos-context";
 import type { BarberiaID, Barbero } from "@/contexts/barberos-context";
 
 /* ==================== Tipos (UI) ==================== */
-// Nota: en la DB normalmente el id es string (ObjectId). En UI usamos id: string.
 type BarberiaIDView = BarberiaID | "todas";
 type EstadoReserva = "pendiente-barbero" | "pendiente-cliente" | "confirmada" | "cancelada" | "completada";
 type Prioridad = "alta" | "normal";
@@ -42,7 +29,7 @@ type Prioridad = "alta" | "normal";
 type ReservasProps = {
   preselectBarbero?: string;
   preselectBarberia?: BarberiaIDView;
-  /** Si true = vista administrador (muestra lista, filtros y acciones) */
+  /** Si true, renderiza vista de administración con lista, filtros y acciones */
   isAdmin?: boolean;
 };
 
@@ -53,24 +40,26 @@ interface Barberia {
   telefono: string;
 }
 interface ServicioPersonalizado { opciones: string[]; extras: string[]; }
+
 interface ReservaDB {
-  id: string; // <- viene de la API
+  id: string; // <- ya normalizado desde API
   cliente: string;
   telefono: string;
-  email: string;
+  email?: string;
   servicio: string;
-  servicioPersonalizado: ServicioPersonalizado;
+  servicioPersonalizado?: ServicioPersonalizado;
   barbero: string;
   barberia: BarberiaID;
-  fecha: string; // YYYY-MM-DD
-  hora: string;  // HH:mm
+  fecha: string;
+  hora: string;
   duracion: number;
   estado: EstadoReserva;
-  notas: string;
+  notas?: string;
   notificaciones: string[];
   modificable: boolean;
   prioridad: Prioridad;
 }
+
 interface NuevaReserva {
   cliente: string; telefono: string; email: string;
   barberia: BarberiaIDView | "";
@@ -82,40 +71,53 @@ interface Servicio {
 }
 interface EditForm { fecha: string; hora: string; barbero: string; notas: string; }
 
-/* ==================== 5.2) Helpers de API ==================== */
+/* ==================== API helpers ==================== */
 const api = {
-  async list() {
+  async list(): Promise<ReservaDB[]> {
     const r = await fetch("/api/reservas", { cache: "no-store" });
-    if (!r.ok) throw new Error("No se pudo cargar reservas");
-    return (await r.json()) as ReservaDB[];
+    const json = await r.json().catch(() => ({}));
+    if (!r.ok || json?.ok === false) {
+      throw new Error(json?.error || `HTTP ${r.status}`);
+    }
+    // API devuelve { ok, data }
+    const data = json?.data;
+    return Array.isArray(data) ? (data as ReservaDB[]) : [];
   },
-  async create(payload: Omit<ReservaDB, "id" | "notificaciones" | "modificable" | "prioridad" | "estado" | "duracion"> & {
-    estado?: EstadoReserva;
-    duracion?: number;
-    notificaciones?: string[];
-    modificable?: boolean;
-    prioridad?: Prioridad;
-  }) {
+
+  async create(payload: Partial<ReservaDB>) {
     const r = await fetch("/api/reservas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (!r.ok) throw new Error("No se pudo crear la reserva");
-    return (await r.json()) as ReservaDB;
+    const json = await r.json().catch(() => ({}));
+    if (!r.ok || json?.ok === false) {
+      throw new Error(json?.error || `HTTP ${r.status}`);
+    }
+    return json?.data as ReservaDB;
   },
+
   async patch(id: string, changes: Partial<ReservaDB>) {
+    // Nota: requiere que tengas /api/reservas/[id]/route.ts implementado
     const r = await fetch(`/api/reservas/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(changes),
     });
-    if (!r.ok) throw new Error("No se pudo actualizar la reserva");
-    return (await r.json()) as ReservaDB;
+    const json = await r.json().catch(() => ({}));
+    if (!r.ok || json?.ok === false) {
+      throw new Error(json?.error || `HTTP ${r.status}`);
+    }
+    return json?.data as ReservaDB;
   },
+
   async remove(id: string) {
+    // Nota: requiere que tengas /api/reservas/[id]/route.ts implementado
     const r = await fetch(`/api/reservas/${id}`, { method: "DELETE" });
-    if (!r.ok) throw new Error("No se pudo eliminar la reserva");
+    const json = await r.json().catch(() => ({}));
+    if (!r.ok || json?.ok === false) {
+      throw new Error(json?.error || `HTTP ${r.status}`);
+    }
     return true;
   },
 };
@@ -132,7 +134,7 @@ export default function Reservas({
   const [filterStatus, setFilterStatus] = useState<"todas" | EstadoReserva>("todas");
   const [selectedBarberia, setSelectedBarberia] = useState<BarberiaIDView>("principal");
   const [barberiaClienteSel, setBarberiaClienteSel] = useState<BarberiaID>("principal");
-  const [verComoCliente, setVerComoCliente] = useState(true); // solo lo ve admin
+  const [verComoCliente, setVerComoCliente] = useState(true);
 
   /* ------- Verificación ------- */
   const [availabilityCheck, setAvailabilityCheck] = useState<{
@@ -156,7 +158,7 @@ export default function Reservas({
     servicioPersonalizado: { opciones: [], extras: [] }, barbero: "", fecha: "", hora: "", notas: "",
   });
 
-  /* ------- Barberías demo (estático en UI) ------- */
+  /* ------- Barberías demo (UI) ------- */
   const [barberias, setBarberias] = useState<Barberia[]>([
     { id: "principal", nombre: "Barbería Central", direccion: "Calle Nápoles", telefono: "+57 3187092130" },
     { id: "norte", nombre: "Barbería Norte", direccion: "Av. Norte 123", telefono: "+57 3000000001" },
@@ -171,24 +173,22 @@ export default function Reservas({
     { id: "combo",        nombre: "Corte + Barba",      duracion: 45, opciones: ["Paquete completo","Estilo clásico","Look moderno"], extras: ["Tratamiento capilar","Masaje","Productos premium"], icono: "✨" },
   ];
 
-  /* ==================== 5.3) Estado + carga inicial desde API ==================== */
+  /* ==================== Estado + carga inicial ==================== */
   const [reservas, setReservas] = useState<ReservaDB[]>([]);
 
   const reload = async () => {
     setLoading(true);
     try {
       const data = await api.list();
-      setReservas(data);
+      setReservas(Array.isArray(data) ? data : []);
     } catch (e) {
-      console.error(e);
+      console.error("No se pudo cargar reservas", e);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    reload();
-  }, []);
+  useEffect(() => { reload(); }, []);
 
   /* ==================== Helpers UI ==================== */
   const findBarberByName = (barberia: BarberiaIDView, nombre: string): Barbero | undefined =>
@@ -221,14 +221,7 @@ export default function Reservas({
     }
   };
 
-  const getPriorityBadge = (prioridad: Prioridad) =>
-    prioridad === "alta" ? (
-      <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-        <Heart className="w-3 h-3 mr-1" />VIP
-      </Badge>
-    ) : null;
-
-  /* ==================== 5.4) Crear reserva (POST) ==================== */
+  /* ==================== Crear / enviar ==================== */
   const canCreate =
     !!(newReserva.cliente && newReserva.servicio && newReserva.barbero &&
        newReserva.fecha && newReserva.hora && newReserva.barberia && newReserva.barberia !== "todas");
@@ -277,7 +270,6 @@ export default function Reservas({
     }
   };
 
-  /* ==================== 5.5) Enviar a barbero (POST) ==================== */
   const canNotify =
     !!(newReserva.cliente && newReserva.barbero && newReserva.servicio &&
        newReserva.fecha && newReserva.hora && newReserva.barberia && newReserva.barberia !== "todas");
@@ -318,7 +310,7 @@ export default function Reservas({
     }
   };
 
-  /* ==================== 5.6) Acciones admin (PATCH/DELETE) ==================== */
+  /* ==================== Acciones admin ==================== */
   const aceptarReserva  = async (id: string) => {
     const r = reservas.find(x => x.id === id);
     const notis = [...(r?.notificaciones ?? []), "Reserva confirmada por el barbero"];
@@ -338,21 +330,18 @@ export default function Reservas({
     await reload();
   };
 
-  const guardarCambiosReserva = async () => {
-    if (!editingReserva) return;
-    const notis = [...editingReserva.notificaciones, `Reserva modificada ${new Date().toLocaleString()}`];
-    await api.patch(editingReserva.id, {
-      fecha: editForm.fecha,
-      hora: editForm.hora,
-      barbero: editForm.barbero,
-      notas: editForm.notas,
-      notificaciones: notis,
-    });
-    setEditingReserva(null);
+  const [posponerDe, setPosponerDe] = useState<ReservaDB | null>(null);
+  const [posFecha, setPosFecha] = useState("");
+  const [posHora, setPosHora] = useState("");
+  const confirmarPosponer = async () => {
+    if (!posponerDe || !posFecha || !posHora) return;
+    const notis = [...posponerDe.notificaciones, `Barbería propuso reprogramar a ${posFecha} ${posHora}`];
+    await api.patch(posponerDe.id, { fecha: posFecha, hora: posHora, estado: "pendiente-cliente", notificaciones: notis });
+    setPosponerDe(null); setPosFecha(""); setPosHora("");
     await reload();
   };
 
-  /* ------- Preselección (cuando navegas con query) ------- */
+  /* ------- Preselección ------- */
   useEffect(() => {
     if (preselectBarberia && preselectBarberia !== "todas") {
       setSelectedBarberia(preselectBarberia);
@@ -367,32 +356,22 @@ export default function Reservas({
     }
   }, [preselectBarbero, preselectBarberia]);
 
-  /* ------- Filtros (solo admin) ------- */
-  const filteredReservas = reservas.filter(r => {
-    const matchesSearch   = r.cliente.toLowerCase().includes(searchTerm.toLowerCase())
-      || r.servicio.toLowerCase().includes(searchTerm.toLowerCase())
-      || r.barbero.toLowerCase().includes(searchTerm.toLowerCase());
+  /* ------- Filtros (SOLO admin) ------- */
+  const filteredReservas = (reservas ?? []).filter(r => {
+    const q = searchTerm.toLowerCase();
+    const matchesSearch   =
+      r.cliente.toLowerCase().includes(q) ||
+      r.servicio.toLowerCase().includes(q) ||
+      r.barbero.toLowerCase().includes(q);
     const matchesFilter   = filterStatus === "todas" || r.estado === filterStatus;
     const matchesBarberia = selectedBarberia === "todas" || r.barberia === selectedBarberia;
     return matchesSearch && matchesFilter && matchesBarberia;
   });
 
-  /* ------- Posponer (admin) ------- */
-  const [posponerDe, setPosponerDe] = useState<ReservaDB | null>(null);
-  const [posFecha, setPosFecha] = useState("");
-  const [posHora, setPosHora] = useState("");
-  const confirmarPosponer = async () => {
-    if (!posponerDe || !posFecha || !posHora) return;
-    const notis = [...posponerDe.notificaciones, `Barbería propuso reprogramar a ${posFecha} ${posHora}`];
-    await api.patch(posponerDe.id, { fecha: posFecha, hora: posHora, estado: "pendiente-cliente", notificaciones: notis });
-    setPosponerDe(null); setPosFecha(""); setPosHora("");
-    await reload();
-  };
-
   /* ==================== Render ==================== */
   return (
     <div className="p-6 space-y-6">
-      {/* Header + botón Nueva Reserva (visible a todos) */}
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
@@ -404,7 +383,6 @@ export default function Reservas({
         </div>
 
         <div className="flex gap-2">
-          {/* Botones SOLO admin */}
           {isAdmin && (
             <>
               <Button variant="outline" onClick={() => setBarberiasDialogOpen(true)}>
@@ -417,7 +395,6 @@ export default function Reservas({
             </>
           )}
 
-          {/* Wizard Nueva Reserva (cliente/admin) */}
           <Dialog open={newDialogOpen} onOpenChange={setNewDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={() => setWizardMsg(null)} className="bg-gradient-to-r from-primary to-purple-600" disabled={saving}>
@@ -695,7 +672,7 @@ export default function Reservas({
         </Card>
       )}
 
-      {/* Lista de reservas (SOLO admin) */}
+      {/* Lista (SOLO admin) */}
       {isAdmin && (
         <div className="grid gap-4">
           {filteredReservas.map((r) => (
@@ -763,7 +740,7 @@ export default function Reservas({
                       </div>
                     )}
 
-                    {r.notificaciones.length > 0 && (
+                    {r.notificaciones?.length > 0 && (
                       <div className="mt-2">
                         <p className="text-xs font-medium mb-1">Historial:</p>
                         {r.notificaciones.map((n, i) => (<p key={i} className="text-xs">• {n}</p>))}
@@ -810,7 +787,7 @@ export default function Reservas({
         </div>
       )}
 
-      {/* Vista pública de Barberos (para cliente) — el admin la puede ocultar */}
+      {/* Vista cliente */}
       {verComoCliente && (
         <Card className="border-2">
           <CardHeader><CardTitle className="flex items-center gap-2"><User className="w-5 h-5" />Barberos — Vista del cliente</CardTitle></CardHeader>

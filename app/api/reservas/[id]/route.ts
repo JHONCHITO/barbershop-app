@@ -1,54 +1,63 @@
+// app/api/reservas/[id]/route.ts
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
-import { getDb } from "@/lib/mongodb";
-import { revalidateTag } from "next/cache";
+import { getDB } from "@/lib/mongodb";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
+export async function GET(
+  _req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
-    const db = await getDb();
-    const doc = await db.collection("reservas").findOne({ _id: new ObjectId(params.id) });
-    if (!doc) return NextResponse.json({ ok: false, error: "No encontrada" }, { status: 404 });
-    return NextResponse.json({ ok: true, data: doc });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: "Error al obtener reserva" }, { status: 500 });
-  }
-}
-
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  try {
-    const updates = await req.json();
-    updates.updatedAt = new Date().toISOString();
-
-    const db = await getDb();
-    const result = await db
+    const db = await getDB();
+    const item = await db
       .collection("reservas")
-      .findOneAndUpdate({ _id: new ObjectId(params.id) }, { $set: updates }, { returnDocument: "after" });
+      .findOne({ _id: new ObjectId(params.id) });
 
-    const value = (result as any)?.value ?? null;
-    if (!value) return NextResponse.json({ ok: false, error: "No encontrada" }, { status: 404 });
-
-    revalidateTag("reservas");
-    return NextResponse.json({ ok: true, data: value });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: "Error al actualizar" }, { status: 500 });
+    if (!item) {
+      return NextResponse.json(
+        { ok: false, message: "RESERVA_NOT_FOUND" },
+        { status: 404 }
+      );
+    }
+    return NextResponse.json({ ok: true, reserva: item }, { status: 200 });
+  } catch (err) {
+    console.error("API GET /api/reservas/[id] error:", err);
+    return NextResponse.json(
+      { ok: false, message: "DB_ERROR_GET" },
+      { status: 500 }
+    );
   }
 }
 
-export async function DELETE(_: Request, { params }: { params: { id: string } }) {
+export async function PATCH(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
   try {
-    const db = await getDb();
-    const del = await db.collection("reservas").deleteOne({ _id: new ObjectId(params.id) });
-    if (del.deletedCount === 0) {
-      return NextResponse.json({ ok: false, error: "No encontrada" }, { status: 404 });
+    const body = await req.json();
+    const db = await getDB();
+
+    const update = { $set: { ...body, updatedAt: new Date() } };
+    const res = await db
+      .collection("reservas")
+      .updateOne({ _id: new ObjectId(params.id) }, update);
+
+    if (!res.matchedCount) {
+      return NextResponse.json(
+        { ok: false, message: "RESERVA_NOT_FOUND" },
+        { status: 404 }
+      );
     }
-    revalidateTag("reservas");
-    return NextResponse.json({ ok: true });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: "Error al eliminar" }, { status: 500 });
+    return NextResponse.json({ ok: true }, { status: 200 });
+  } catch (err) {
+    console.error("API PATCH /api/reservas/[id] error:", err);
+    return NextResponse.json(
+      { ok: false, message: "DB_ERROR_UPDATE" },
+      { status: 500 }
+    );
   }
 }
