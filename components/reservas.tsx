@@ -72,18 +72,14 @@ interface Servicio {
 interface EditForm { fecha: string; hora: string; barbero: string; notas: string; }
 
 /* ==================== API helpers ==================== */
+// dentro de components/reservas.tsx
 const api = {
   async list(): Promise<ReservaDB[]> {
     const r = await fetch("/api/reservas", { cache: "no-store" });
     const json = await r.json().catch(() => ({}));
-    if (!r.ok || json?.ok === false) {
-      throw new Error(json?.error || `HTTP ${r.status}`);
-    }
-    // API devuelve { ok, data }
-    const data = json?.data;
-    return Array.isArray(data) ? (data as ReservaDB[]) : [];
+    if (!r.ok || json?.ok === false) throw new Error(json?.error || `HTTP ${r.status}`);
+    return Array.isArray(json?.data) ? json.data : [];
   },
-
   async create(payload: Partial<ReservaDB>) {
     const r = await fetch("/api/reservas", {
       method: "POST",
@@ -91,33 +87,24 @@ const api = {
       body: JSON.stringify(payload),
     });
     const json = await r.json().catch(() => ({}));
-    if (!r.ok || json?.ok === false) {
-      throw new Error(json?.error || `HTTP ${r.status}`);
-    }
+    if (!r.ok || json?.ok === false) throw new Error(json?.error || `HTTP ${r.status}`);
     return json?.data as ReservaDB;
   },
-
+  // patch/remove a /api/reservas/[id] si ya lo tienes implementado
   async patch(id: string, changes: Partial<ReservaDB>) {
-    // Nota: requiere que tengas /api/reservas/[id]/route.ts implementado
     const r = await fetch(`/api/reservas/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(changes),
     });
     const json = await r.json().catch(() => ({}));
-    if (!r.ok || json?.ok === false) {
-      throw new Error(json?.error || `HTTP ${r.status}`);
-    }
+    if (!r.ok || json?.ok === false) throw new Error(json?.error || `HTTP ${r.status}`);
     return json?.data as ReservaDB;
   },
-
   async remove(id: string) {
-    // Nota: requiere que tengas /api/reservas/[id]/route.ts implementado
     const r = await fetch(`/api/reservas/${id}`, { method: "DELETE" });
     const json = await r.json().catch(() => ({}));
-    if (!r.ok || json?.ok === false) {
-      throw new Error(json?.error || `HTTP ${r.status}`);
-    }
+    if (!r.ok || json?.ok === false) throw new Error(json?.error || `HTTP ${r.status}`);
     return true;
   },
 };
@@ -377,7 +364,7 @@ export default function Reservas({
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
             Sistema de Reservas
           </h1>
-          <p className="text-muted-foreground">
+        <p className="text-muted-foreground">
             {loading ? "Cargando reservas..." : "Gestión completa con verificación en tiempo real"}
           </p>
         </div>

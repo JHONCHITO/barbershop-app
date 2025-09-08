@@ -1,47 +1,29 @@
 // app/api/reservas/route.ts
 import { NextResponse } from "next/server";
 import { getDB } from "@/lib/mongodb";
+import type { Reserva } from "@/types/reserva";
 
+// Fuerza Node runtime y sin caché
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-// (Opcional) Define un tipo local sencillo si no quieres depender de "@/types/reserva"
-type ReservaDoc = {
-  cliente: string;
-  telefono: string;
-  email?: string;
-  servicio: string;
-  servicioPersonalizado?: { opciones: string[]; extras: string[] };
-  barbero: string;
-  barberia: string;   // "principal" | "norte" | "sur" (o lo que uses)
-  fecha: string;      // "YYYY-MM-DD"
-  hora: string;       // "HH:mm"
-  duracion?: number;
-  estado?: "pendiente-barbero" | "pendiente-cliente" | "confirmada" | "cancelada" | "completada";
-  notas?: string;
-  notificaciones?: string[];
-  modificable?: boolean;
-  prioridad?: "alta" | "normal";
-  createdAt?: Date;
-};
 
 export async function GET() {
   try {
     const db = await getDB();
     const docs = await db
-      .collection<ReservaDoc>("reservas")
+      .collection<Reserva>("reservas")
       .find({})
       .sort({ createdAt: -1 })
       .toArray();
 
-    // Normaliza: id en vez de _id
+    // Normaliza a { id: string, ... }
     const data = docs.map((d: any) => {
       const { _id, ...rest } = d;
       return { ...rest, id: String(_id) };
     });
 
-    return NextResponse.json({ ok: true, data });
+    return NextResponse.json({ ok: true, data }, { status: 200 });
   } catch (err: any) {
     console.error("GET /api/reservas error →", err);
     return NextResponse.json(
@@ -55,7 +37,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // Valida campos mínimos
+    // Valida campos mínimos (ajusta a tus nombres reales si difieren)
     const required = ["cliente", "telefono", "servicio", "barbero", "fecha", "hora", "barberia"];
     const faltan = required.filter((k) => !body?.[k]);
     if (faltan.length) {
@@ -66,7 +48,7 @@ export async function POST(req: Request) {
     }
 
     const now = new Date();
-    const reserva: ReservaDoc = {
+    const reserva: Reserva = {
       ...body,
       estado: body.estado ?? "pendiente-barbero",
       createdAt: now,
@@ -77,9 +59,9 @@ export async function POST(req: Request) {
     };
 
     const db = await getDB();
-    const result = await db.collection<ReservaDoc>("reservas").insertOne(reserva as any);
+    const result = await db.collection<Reserva>("reservas").insertOne(reserva as any);
 
-    // Notificación (opcional, si tienes polling del admin)
+    // (Opcional) notificación para admin
     try {
       await db.collection("notifications").insertOne({
         type: "reserva_creada",
