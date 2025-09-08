@@ -1,28 +1,28 @@
+// lib/mongodb.ts
 import { MongoClient, Db } from "mongodb";
 
-declare global {
-  // eslint-disable-next-line no-var
-  var _mongoClientPromise: Promise<MongoClient> | undefined;
-}
+let client: MongoClient | null = null;
+let db: Db | null = null;
 
-function getMongoUri(): string {
+export async function getDb(): Promise<Db> {
+  if (db) return db;
+
   const uri = process.env.MONGODB_URI;
+  const dbName = process.env.MONGODB_DB || "barberpro";
+
   if (!uri) {
+    // NO lances al importar. Lanza aquí (runtime).
     throw new Error("Falta la variable de entorno MONGODB_URI");
   }
-  return uri;
-}
 
-export async function getClient(): Promise<MongoClient> {
-  if (!global._mongoClientPromise) {
-    const client = new MongoClient(getMongoUri());
-    global._mongoClientPromise = client.connect();
+  if (!client) {
+    client = new MongoClient(uri, {
+      // opciones seguras por defecto
+      maxPoolSize: 10,
+    });
+    await client.connect();
   }
-  return global._mongoClientPromise;
-}
 
-export async function getDb(dbName?: string): Promise<Db> {
-  const client = await getClient();
-  const name = dbName || process.env.MONGODB_DB || "miapp";
-  return client.db(name);
+  db = client.db(dbName);
+  return db;
 }

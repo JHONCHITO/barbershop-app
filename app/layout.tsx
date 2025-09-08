@@ -1,7 +1,6 @@
 // app/layout.tsx
 import type { Metadata, Viewport } from "next";
-import "../styles/tailwind.css";  // ← primero
-import "./globals.css";           // ← después
+import "./globals.css";
 import Providers from "./providers";
 import BackFloating from "@/components/back-floating";
 

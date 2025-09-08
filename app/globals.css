@@ -1,5 +1,7 @@
-/* app/globals.css */
-/* No pongas @tailwind aquí. Este archivo solo define capas y utilidades. */
+/* app/globals.css — versión estable para Vercel + Tailwind */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* ====== PALETA FUTURISTA (Neon Barber) ====== */
 :root {
@@ -28,7 +30,6 @@
   --chart-4: 15 90% 60%;
   --chart-5: 48 95% 55%;
   --radius: 0.75rem;
-
   --sidebar: 232 22% 18%;
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
@@ -44,14 +45,12 @@
   --card: 232 24% 16%;
 }
 
-/* ====== BASE (requiere que tailwind.css se importe antes) ====== */
+/* ====== BASE ====== */
 @layer base {
   * { @apply border-border; }
 
-  /* Foco accesible con ring del tema — ojo: SIN outline-ring/50 */
-  *:focus-visible {
-    @apply outline-none ring-2 ring-ring/50 ring-offset-2 ring-offset-background;
-  }
+  /* Nada de 'outline-ring/50' (no existe). Usa ring utilities: */
+  *:focus-visible { @apply outline-none ring-2 ring-ring/50 ring-offset-2 ring-offset-background; }
 
   body { @apply bg-background text-foreground; }
 }
