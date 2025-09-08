@@ -1,38 +1,31 @@
 // lib/mongodb.ts
 import { MongoClient, Db } from "mongodb";
 
-const uri = process.env.MONGODB_URI as string;
-if (!uri) {
-  throw new Error("Falta la variable de entorno MONGODB_URI");
-}
-
-const dbName = process.env.MONGODB_DB || "barbershop";
-
-declare global {
-  // para cachear en hot-reload / serverless
-  // (usar any aquí evita conflictos de tipos en runtimes)
-  // eslint-disable-next-line no-var
-  var __mongoClientPromise: Promise<MongoClient> | undefined;
-  // eslint-disable-next-line no-var
-  var __mongoDb: Db | undefined;
-}
-
-let clientPromise: Promise<MongoClient>;
-
-if (!global.__mongoClientPromise) {
-  const client = new MongoClient(uri, {
-    maxPoolSize: 5,
-    retryWrites: true,
-  });
-  global.__mongoClientPromise = client.connect();
-}
-
-clientPromise = global.__mongoClientPromise;
+let client: MongoClient | null = null;
+let db: Db | null = null;
 
 export async function getDB(): Promise<Db> {
-  if (global.__mongoDb) return global.__mongoDb;
-  const client = await clientPromise;       // connect() es idempotente en v6
-  const db = client.db(dbName);
-  global.__mongoDb = db;
+  if (db) return db;
+
+  const uri = process.env.MONGODB_URI;
+  const dbName = process.env.MONGODB_DB;
+
+  if (!uri) {
+    // Solo lanzamos error cuando REALMENTE se usa (runtime), no al importar
+    throw new Error("Falta MONGODB_URI en variables de entorno");
+  }
+  if (!dbName) {
+    throw new Error("Falta MONGODB_DB en variables de entorno");
+  }
+
+  if (!client) {
+    client = new MongoClient(uri, {
+      // opciones seguras para Node runtime
+      maxPoolSize: 10,
+    });
+    await client.connect();
+  }
+
+  db = client.db(dbName);
   return db;
 }
