@@ -78,5 +78,12 @@
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5"
+  },
+  "pnpm": {
+    "neverBuiltDependencies": [
+      "@mongodb-js/zstd",
+      "kerberos",
+      "mongodb-client-encryption"
+    ]
   }
 }
